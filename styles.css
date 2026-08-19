@@ -94,3 +94,23 @@ button.primary:disabled{opacity:.5}
 
 td .dot{margin-right:6px}
 .tiles .v{font-size:20px}
+
+/* ---- first-open gate ---- */
+.gate{position:fixed;inset:0;z-index:40;background:var(--brand);color:#fff;
+ display:flex;align-items:center;justify-content:center;padding:26px}
+.gate.hidden{display:none}
+.gateBox{width:100%;max-width:340px;text-align:center}
+.gateBox img{border-radius:16px;margin-bottom:16px}
+.gateBox h1{font-size:21px;margin:0 0 8px;letter-spacing:-.01em}
+.gateBox .gp{font-size:13.5px;line-height:1.6;color:rgba(255,255,255,.8);margin:0 0 22px}
+.gateBox input{margin-bottom:12px;text-align:center;font-size:17px;letter-spacing:.08em;
+ background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);color:#fff}
+.gateBox input::placeholder{color:rgba(255,255,255,.55);letter-spacing:normal}
+.gateBox input:focus{outline:2px solid #fff;outline-offset:-1px}
+.gateBox .primary{background:#fff;color:var(--brand)}
+.linkbtn{display:block;width:100%;background:none;color:rgba(255,255,255,.8);
+ padding:14px;font-size:13.5px;text-decoration:underline;margin-top:4px}
+.gate .err{color:#ffd7d7}
+/* ---- viewer mode: no bottom bar at all ---- */
+body.viewonly{padding-bottom:14px}
+body.viewonly .tabs{display:none}

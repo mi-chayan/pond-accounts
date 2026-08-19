@@ -21,8 +21,9 @@
     <div><strong>Natun Bari Pond</strong><span id="stamp">loading…</span></div>
   </div>
   <div class="topbtns">
+    <button id="installBtn" class="ghost hidden" title="Install app">Install</button>
     <button id="themeBtn" class="ghost" title="Theme">◐</button>
-    <button id="authBtn" class="ghost">Sign in</button>
+    <button id="authBtn" class="ghost" title="Access">🔑</button>
   </div>
 </header>
 
@@ -150,16 +151,16 @@
   <button data-v="pay" class="lockable"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-8 1.7-8 4v2h16v-2c0-2.3-4.7-4-8-4Z"/></svg><span>Payments</span></button>
 </nav>
 
-<div class="sheet hidden" id="lockSheet">
-  <div class="sheetBox">
-    <h3>Sign in to enter data</h3>
-    <p>Anyone can view the dashboard. Only Rafique can add entries.</p>
-    <input type="password" id="pinInput" placeholder="Passcode" autocomplete="current-password">
-    <div class="sheetBtns">
-      <button class="ghost" id="lockCancel">Cancel</button>
-      <button class="primary" id="lockOk">Sign in</button>
-    </div>
-    <p class="err hidden" id="lockErr"></p>
+
+<div class="gate" id="gate">
+  <div class="gateBox">
+    <img src="icons/icon-192.png" alt="" width="66" height="66">
+    <h1>Natun Bari Pond</h1>
+    <p class="gp">Enter the passcode to add entries.<br>Or continue as a viewer to see the dashboard only.</p>
+    <input type="password" id="gatePin" inputmode="numeric" placeholder="Passcode" autocomplete="current-password">
+    <button class="primary" id="gateGo">Unlock full access</button>
+    <button class="linkbtn" id="gateSkip">Continue without password</button>
+    <p class="err hidden" id="gateErr"></p>
   </div>
 </div>
 

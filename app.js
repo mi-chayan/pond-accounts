@@ -12,7 +12,9 @@ const f = n => Math.round(n).toLocaleString('en-US');
 const NS = 'http://www.w3.org/2000/svg';
 const el = (t, a = {}) => { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); return n; };
 const today = () => new Date().toISOString().slice(0, 10);
-let DATA = null, PIN = sessionStorage.getItem('pondpin') || '';
+let DATA = null;
+let PIN  = localStorage.getItem('pondpin') || '';
+let MODE = localStorage.getItem('pondmode') || '';   // '' | 'admin' | 'view'
 
 function toast(msg, bad) {
   const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : '');
@@ -28,33 +30,69 @@ $('#themeBtn').onclick = () => {
 };
 if (localStorage.getItem('pondtheme')) document.documentElement.setAttribute('data-theme', localStorage.getItem('pondtheme'));
 
-/* ---------- auth ---------- */
-function signedIn() { return !!PIN; }
-function refreshAuth() {
-  $('#authBtn').textContent = signedIn() ? 'Sign out' : 'Sign in';
+/* ---------- access mode ---------- */
+function signedIn() { return MODE === 'admin' && !!PIN; }
+
+function applyMode() {
+  const admin = signedIn();
+  document.body.classList.toggle('viewonly', !admin);
+  $('#authBtn').textContent = admin ? '🔓' : '🔑';
+  $('#authBtn').title = admin ? 'Full access. Tap to lock.' : 'Viewer. Tap to unlock.';
+  if (!admin) show('dash');
 }
-$('#authBtn').onclick = () => {
-  if (signedIn()) { PIN = ''; sessionStorage.removeItem('pondpin'); refreshAuth(); show('dash'); toast('Signed out'); }
-  else openLock();
+
+function openGate(force) {
+  $('#gateErr').classList.add('hidden');
+  $('#gatePin').value = '';
+  $('#gate').classList.remove('hidden');
+  $('#gateSkip').textContent = force ? 'Cancel, stay as viewer' : 'Continue without password';
+  setTimeout(() => $('#gatePin').focus(), 120);
+}
+function closeGate() { $('#gate').classList.add('hidden'); }
+
+$('#gateSkip').onclick = () => {
+  MODE = 'view'; PIN = '';
+  localStorage.setItem('pondmode', 'view'); localStorage.removeItem('pondpin');
+  closeGate(); applyMode();
 };
-function openLock() { $('#lockSheet').classList.remove('hidden'); $('#lockErr').classList.add('hidden'); setTimeout(() => $('#pinInput').focus(), 80); }
-$('#lockCancel').onclick = () => $('#lockSheet').classList.add('hidden');
-$('#pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#lockOk').click(); });
-$('#lockOk').onclick = async () => {
-  const v = $('#pinInput').value.trim();
-  if (!v) return;
-  $('#lockOk').disabled = true;
+
+$('#gatePin').addEventListener('keydown', e => { if (e.key === 'Enter') $('#gateGo').click(); });
+
+$('#gateGo').onclick = async () => {
+  const v = $('#gatePin').value.trim();
+  if (!v) { $('#gateErr').textContent = 'Type the passcode, or continue as a viewer.'; $('#gateErr').classList.remove('hidden'); return; }
+  $('#gateGo').disabled = true; $('#gateGo').textContent = 'Checking…';
   const r = await post({ action: 'check', pin: v });
-  $('#lockOk').disabled = false;
+  $('#gateGo').disabled = false; $('#gateGo').textContent = 'Unlock full access';
   if (r.ok) {
-    PIN = v; sessionStorage.setItem('pondpin', v); $('#pinInput').value = '';
-    $('#lockSheet').classList.add('hidden'); refreshAuth(); toast('Signed in. You can enter data now.');
-    if (pendingTab) { show(pendingTab); pendingTab = null; }
+    PIN = v; MODE = 'admin';
+    localStorage.setItem('pondpin', v); localStorage.setItem('pondmode', 'admin');
+    closeGate(); applyMode(); toast('Full access unlocked.');
   } else {
-    $('#lockErr').textContent = r.error || 'That passcode did not work.';
-    $('#lockErr').classList.remove('hidden');
+    $('#gateErr').textContent = r.error || 'That passcode did not work.';
+    $('#gateErr').classList.remove('hidden');
   }
 };
+
+$('#authBtn').onclick = () => {
+  if (signedIn()) {
+    MODE = 'view'; PIN = '';
+    localStorage.setItem('pondmode', 'view'); localStorage.removeItem('pondpin');
+    applyMode(); toast('Locked. Dashboard only.');
+  } else openGate(true);
+};
+
+/* ---------- install to home screen ---------- */
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e; $('#installBtn').classList.remove('hidden');
+});
+$('#installBtn').onclick = async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt(); await deferredPrompt.userChoice;
+  deferredPrompt = null; $('#installBtn').classList.add('hidden');
+};
+window.addEventListener('appinstalled', () => $('#installBtn').classList.add('hidden'));
 
 /* ---------- network ---------- */
 async function post(body) {
@@ -94,7 +132,7 @@ function show(v) {
 }
 $$('#tabs button').forEach(b => b.onclick = () => {
   const v = b.dataset.v;
-  if (v !== 'dash' && !signedIn()) { pendingTab = v; openLock(); return; }
+  if (v !== 'dash' && !signedIn()) { openGate(true); return; }
   show(v);
 });
 
@@ -258,7 +296,7 @@ $('#paySel').addEventListener('change', updatePayState);
 function wire(sel, build, okMsg) {
   $(sel).addEventListener('submit', async ev => {
     ev.preventDefault();
-    if (!signedIn()) { openLock(); return; }
+    if (!signedIn()) { openGate(true); return; }
     const btn = ev.target.querySelector('button[type=submit]');
     const old = btn.textContent; btn.disabled = true; btn.textContent = 'Saving…';
     const r = await post(Object.assign({ pin: PIN }, build(ev.target)));
@@ -270,7 +308,7 @@ function wire(sel, build, okMsg) {
       toast(r.result || okMsg); show('dash');
     } else {
       toast(r.error || 'Could not save', true);
-      if (/passcode/i.test(r.error || '')) { PIN = ''; sessionStorage.removeItem('pondpin'); refreshAuth(); }
+      if (/passcode/i.test(r.error || '')) { PIN = ''; MODE = 'view'; localStorage.removeItem('pondpin'); localStorage.setItem('pondmode','view'); applyMode(); openGate(true); }
     }
   });
 }
@@ -280,7 +318,8 @@ wire('#f-sale', fm => ({ action: 'sale', date: fm.date.value, buyer: fm.buyer.va
 wire('#f-pay', fm => ({ action: 'payment', partner: fm.partner.value, date: fm.date.value, amount: +fm.amount.value, refund: fm.refund.checked }), 'Payment saved');
 
 /* ---------- boot ---------- */
-refreshAuth();
+applyMode();
+if (!MODE) openGate(false); else closeGate();
 load();
 setInterval(() => load(true), 120000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(true); });

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pond Accounts</title>
+<meta name="theme-color" content="#0d3b66">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pond">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <img src="icons/icon-192.png" alt="" width="28" height="28">
+    <div><strong>Natun Bari Pond</strong><span id="stamp">loading…</span></div>
+  </div>
+  <div class="topbtns">
+    <button id="themeBtn" class="ghost" title="Theme">◐</button>
+    <button id="authBtn" class="ghost">Sign in</button>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ============ DASHBOARD ============ -->
+<section class="view" id="v-dash">
+  <div id="tiles" class="tiles"></div>
+
+  <div class="card">
+    <h2>Where the money went</h2>
+    <p class="cap" id="costCap"></p>
+    <div id="donut"></div>
+  </div>
+
+  <div class="card">
+    <h2>Monthly running cost</h2>
+    <p class="cap">Lease excluded. The dashed line is the average.</p>
+    <div id="bars"></div>
+  </div>
+
+  <div class="card">
+    <h2>Partners</h2>
+    <p class="cap">Should invest against actually paid.</p>
+    <div id="partners"></div>
+  </div>
+
+  <div class="card">
+    <h2>Every month the pond needs</h2>
+    <p class="cap" id="planCap"></p>
+    <div id="plan"></div>
+  </div>
+
+  <div class="card">
+    <h2>Latest entries</h2>
+    <div id="recent"></div>
+  </div>
+</section>
+
+<!-- ============ ROUND ============ -->
+<section class="view hidden" id="v-round">
+  <div class="card">
+    <h2>Announce an investment round</h2>
+    <p class="cap">Enter the total the pond needs. It is split 40 / 40 / 20 automatically and written to the ledger and to each partner's due.</p>
+    <form id="f-round" class="form">
+      <label>Date<input type="date" name="date" required></label>
+      <label>What is it for<input name="purpose" list="purposes" value="Feed &amp; other cost" required></label>
+      <datalist id="purposes">
+        <option>Feed &amp; other cost</option><option>Lease Capital</option>
+        <option>Cleaning &amp; Fish buy</option><option>Medicine</option><option>Netting</option>
+      </datalist>
+      <label>Total amount the pond needs<input type="number" name="amount" min="1" step="1" inputmode="numeric" required></label>
+      <div class="split" id="roundSplit"></div>
+      <button class="primary" type="submit">Announce round</button>
+    </form>
+  </div>
+</section>
+
+<!-- ============ EXPENSE ============ -->
+<section class="view hidden" id="v-expense">
+  <div class="card">
+    <h2>Record an expense</h2>
+    <p class="cap">Money that has gone out of the pond.</p>
+    <form id="f-expense" class="form">
+      <label>Date<input type="date" name="date" required></label>
+      <label>Paid to<input name="payee" list="payees" placeholder="Mohd Ullah" required></label>
+      <datalist id="payees"></datalist>
+      <label>What was bought<input name="purpose" placeholder="Feed 5 Bag" required></label>
+      <label>Amount<input type="number" name="amount" min="1" step="1" inputmode="numeric" required></label>
+      <label>Remarks <span class="opt">optional</span><input name="remarks"></label>
+      <button class="primary" type="submit">Save expense</button>
+    </form>
+  </div>
+</section>
+
+<!-- ============ SALE ============ -->
+<section class="view hidden" id="v-sale">
+  <div class="card">
+    <h2>Record fish leaving the pond</h2>
+    <p class="cap">Sold to a buyer, or eaten by the partners. Eaten fish counts as income but never as cash.</p>
+    <form id="f-sale" class="form">
+      <label>Date<input type="date" name="date" required></label>
+      <div class="row">
+        <label>Type
+          <select name="type"><option>Sold</option><option>Eaten</option></select></label>
+        <label id="takenWrap" class="hidden">Taken by
+          <select name="takenBy"><option>Rafique</option><option>Anwar</option><option>Shahidullah</option></select></label>
+      </div>
+      <label>Buyer and fish species<input name="buyer" placeholder="Badsa - Gras, Rou, Mrig" required></label>
+      <div class="row">
+        <label>Weight in kg<input type="number" name="kg" min="0.1" step="0.1" inputmode="decimal" required></label>
+        <label>Rate per kg<input type="number" name="rate" min="1" step="1" inputmode="numeric" value="200" required></label>
+      </div>
+      <label>Discount <span class="opt">if the buyer paid less</span>
+        <input type="number" name="discount" min="0" step="1" inputmode="numeric" value="0"></label>
+      <div class="split" id="saleCalc"></div>
+      <button class="primary" type="submit">Save sale</button>
+    </form>
+  </div>
+</section>
+
+<!-- ============ PAYMENTS ============ -->
+<section class="view hidden" id="v-pay">
+  <div class="card">
+    <h2>Record a partner payment</h2>
+    <p class="cap">Money handed to Rafique. Rafique funds his own share automatically, so he is not listed here.</p>
+    <form id="f-pay" class="form">
+      <label>Partner<select name="partner" id="paySel"></select></label>
+      <label>Date<input type="date" name="date" required></label>
+      <label>Amount<input type="number" name="amount" min="1" step="1" inputmode="numeric" required></label>
+      <label class="check"><input type="checkbox" name="refund"> This is money returned to him, not received</label>
+      <div class="split" id="payState"></div>
+      <button class="primary" type="submit">Save payment</button>
+    </form>
+  </div>
+</section>
+
+</main>
+
+<nav class="tabs" id="tabs">
+  <button data-v="dash" class="on"><svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6V11h-6v9Zm0-16v5h6V4h-6Z"/></svg><span>Dashboard</span></button>
+  <button data-v="round" class="lockable"><svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Zm0 8.5L4.2 6.6 12 2.7l7.8 3.9L12 10.5ZM2 17l10 5 10-5-2.2-1.1L12 19.5 4.2 15.9 2 17Zm0-5 10 5 10-5-2.2-1.1L12 14.5 4.2 10.9 2 12Z"/></svg><span>Round</span></button>
+  <button data-v="expense" class="lockable"><svg viewBox="0 0 24 24"><path d="M19 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 12H5V7h14v10Zm-8-2h2v-2h2v-2h-2V9h-2v2H9v2h2v2Z"/></svg><span>Expense</span></button>
+  <button data-v="sale" class="lockable"><svg viewBox="0 0 24 24"><path d="M16 6c-3.9 0-7.3 2-9.2 5 .6 1 1.4 1.9 2.3 2.6L6 17l4.6-1.4c1.6.9 3.5 1.4 5.4 1.4 3.3 0 6-2.5 6-5.5S19.3 6 16 6Zm2 4.6a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Z"/></svg><span>Sale</span></button>
+  <button data-v="pay" class="lockable"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-8 1.7-8 4v2h16v-2c0-2.3-4.7-4-8-4Z"/></svg><span>Payments</span></button>
+</nav>
+
+<div class="sheet hidden" id="lockSheet">
+  <div class="sheetBox">
+    <h3>Sign in to enter data</h3>
+    <p>Anyone can view the dashboard. Only Rafique can add entries.</p>
+    <input type="password" id="pinInput" placeholder="Passcode" autocomplete="current-password">
+    <div class="sheetBtns">
+      <button class="ghost" id="lockCancel">Cancel</button>
+      <button class="primary" id="lockOk">Sign in</button>
+    </div>
+    <p class="err hidden" id="lockErr"></p>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

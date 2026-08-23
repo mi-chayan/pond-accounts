@@ -82,6 +82,36 @@ async function post(body) {
   } catch (e) { return { ok: false, error: 'Could not reach the sheet. Check your connection.' }; }
 }
 
+/* The published Apps Script may still be the older version. Rather than showing
+   blank rows, translate the old field names and rebuild what is missing. */
+let OLDAPI = false;
+function normalize(d) {
+  if (!d) return d;
+  OLDAPI = false;
+  d.investments = d.investments || [];
+  d.expenses = d.expenses || [];
+  d.sales = d.sales || [];
+  d.sales.forEach(s => {
+    if (s.description == null) { s.description = s.buyer || ''; OLDAPI = true; }
+    if (s.comment == null) s.comment = s.remarks || '';
+  });
+  d.expenses.forEach(e => { if (e.comment == null) e.comment = e.remarks || ''; });
+  if (!d.payments) {
+    OLDAPI = true;
+    d.payments = [];
+    (d.partners || []).forEach(p => (p.payments || []).forEach(q => {
+      d.payments.push(Object.assign({ partner: p.name }, q));
+    }));
+  }
+  if (!d.partnerNames) d.partnerNames = (d.partners || []).map(p => p.name);
+  const s = d.summary || (d.summary = {});
+  if (s.recovered == null) s.recovered = s.cost ? Math.round(s.revenue / s.cost * 1000) / 10 : 0;
+  // A round writes its date on the first of its three rows only. Carry it down.
+  let carry = '';
+  d.investments.forEach(r => { if (r.date) carry = r.date; else r.date = carry; });
+  return d;
+}
+
 let loading = false, lastLoad = 0;
 async function load(silent) {
   const now = Date.now();
@@ -95,11 +125,11 @@ async function doLoad(silent) {
   try {
     const res = await fetch(API + '?t=' + Date.now());
     const j = await res.json();
-    if (j.ok) { DATA = j.data; localStorage.setItem('ponddata', JSON.stringify(DATA)); render(); }
+    if (j.ok) { DATA = normalize(j.data); localStorage.setItem('ponddata', JSON.stringify(DATA)); render(); }
     else if (!silent) toast(j.error || 'Could not read the sheet', true);
   } catch (e) {
     const c = localStorage.getItem('ponddata');
-    if (c) { DATA = JSON.parse(c); render(); $('#stamp').textContent = 'offline · last saved copy'; }
+    if (c) { DATA = normalize(JSON.parse(c)); render(); $('#stamp').textContent = 'offline · last saved copy'; }
     else if (!silent) toast('Offline and nothing saved yet', true);
   }
 }
@@ -172,6 +202,7 @@ function render() {
   $('#stamp').textContent = 'updated ' + new Date(DATA.updated)
     .toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+  banner();
   drawChips(s);
   drawTrend(s);
   drawRecovery(s);
@@ -180,6 +211,21 @@ function render() {
   drawPartners(s);
   fillPartnerSelect();
   updatePayState();
+}
+
+
+/* An honest warning rather than a screen full of blanks. */
+function banner() {
+  let el = document.getElementById('oldapi');
+  if (!OLDAPI) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'oldapi'; el.className = 'card warnbar';
+    el.innerHTML = '<b>The sheet is running the old script.</b>' +
+      'Fish descriptions and comments will not save, and no entry can be edited. ' +
+      'Paste the new Code.gs into Apps Script, then Deploy, Manage deployments, New version.';
+    $('#v-dash').insertBefore(el, $('#chips'));
+  }
 }
 
 /* ---- stat chips ---- */
@@ -371,7 +417,11 @@ function openHist(key) {
   openSheet(K.title, rows.length + ' · ' + f(total), html, () => {
     $$('#sheetBody .hrow').forEach(b => b.onclick = () => {
       if (!signedIn()) { toast('Passcode needed to change entries', true); return; }
-      openEdit(key, rows[+b.dataset.i]);
+      const rec = rows[+b.dataset.i];
+      if (!(rec && rec.row > 0)) {
+        toast('Editing needs the new Apps Script. Deploy a new version first.', true); return;
+      }
+      openEdit(key, rec);
     });
   });
 }
@@ -460,7 +510,7 @@ function openEdit(key, rec) {
       const r = await post(body);
       btn.disabled = false; btn.textContent = 'Save the change';
       if (r.ok) {
-        DATA = r.data; localStorage.setItem('ponddata', JSON.stringify(DATA)); render();
+        DATA = normalize(r.data); localStorage.setItem('ponddata', JSON.stringify(DATA)); render();
         closeSheet(); toast(r.result || 'Saved');
       } else toast(r.error || 'Could not save', true);
     });
@@ -526,7 +576,7 @@ function wire(sel, build, okMsg) {
     const r = await post(Object.assign({ pin: PIN }, build(ev.target)));
     btn.disabled = false; btn.textContent = old;
     if (r.ok) {
-      DATA = r.data; localStorage.setItem('ponddata', JSON.stringify(DATA)); render();
+      DATA = normalize(r.data); localStorage.setItem('ponddata', JSON.stringify(DATA)); render();
       ev.target.reset(); $$('input[type=date]').forEach(i => i.value = today());
       invPreview(); salePreview();
       toast(r.result || okMsg); show('dash');

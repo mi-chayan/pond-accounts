@@ -2,7 +2,7 @@
    Rule: the network is always the truth. The cache exists only so the app still
    opens when the phone has no signal. That way any change published to the site
    reaches every installed app on the very next open, with no reinstall. */
-const CACHE = 'pond-v6';
+const CACHE = 'pond-v7';
 const SHELL = ['/', '/index.html', '/app.js', '/styles.css', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 
@@ -39,7 +39,7 @@ self.addEventListener('fetch', e => {
 
   const p = new URL(req.url).pathname;
   // The app itself: always try the network so a published change arrives at once.
-  if (/\.(html|js|css|webmanifest)$/.test(p) || p === '/') { e.respondWith(freshFirst(req)); return; }
+  if (/\.(html|js|css|webmanifest|json)$/.test(p) || p === '/') { e.respondWith(freshFirst(req)); return; }
 
   // Icons and images never change, so serve them from cache for speed.
   e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {

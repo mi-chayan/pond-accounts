@@ -15,188 +15,231 @@
 </head>
 <body>
 
-<div class="splash" id="splash">
-  <svg viewBox="0 0 200 120" aria-hidden="true">
-    <g class="f f1"><path d="M0 0c-18 0-30 8-34 14 4 6 16 14 34 14 10 0 18-3 23-7l14 9V-2l-14 9c-5-4-13-7-23-7Z"/><circle cx="-22" cy="11" r="2.4"/></g>
-    <g class="f f2"><path d="M0 0c-13 0-22 6-25 10 3 4 12 10 25 10 7 0 13-2 17-5l10 6V-1l-10 6c-4-3-10-5-17-5Z"/><circle cx="-16" cy="8" r="1.8"/></g>
-    <g class="f f3"><path d="M0 0c-10 0-17 5-19 8 2 3 9 8 19 8 5 0 10-2 13-4l8 5V-1l-8 5c-3-2-8-4-13-4Z"/><circle cx="-12" cy="6" r="1.4"/></g>
+<!-- Natun Bari Pond -->
+<div class="splash" id="splash" aria-hidden="true">
+  <svg viewBox="0 0 200 120" class="sfish" aria-hidden="true">
+    <!-- Nose on the RIGHT, tail on the LEFT, so the fish swims forwards. -->
+    <g class="fsh f1"><path d="M0 0 C10 -9 30 -9 40 0 C30 9 10 9 0 0 Z"/><path d="M6 0 L-13 -10 L-13 10 Z"/><circle cx="30" cy="-2" r="1.8" class="eye"/></g>
+    <g class="fsh f2"><path d="M0 0 C7 -6 21 -6 28 0 C21 6 7 6 0 0 Z"/><path d="M4 0 L-9 -7 L-9 7 Z"/><circle cx="21" cy="-1.4" r="1.3" class="eye"/></g>
+    <g class="fsh f3"><path d="M0 0 C6 -5 17 -5 22 0 C17 5 6 5 0 0 Z"/><path d="M3 0 L-7 -6 L-7 6 Z"/><circle cx="16" cy="-1.2" r="1.1" class="eye"/></g>
   </svg>
-  <div class="sp-name">Natun Bari Pond</div>
-  <div class="sp-wave"><i></i><i></i><i></i></div>
+  <p class="sname">Natun Bari Pond</p>
 </div>
-
 
 <header class="top">
   <div class="brand">
-    <img src="icons/icon-192.png" alt="" width="28" height="28">
-    <div><strong>Natun Bari Pond</strong><span id="stamp">loading…</span></div>
+    <svg viewBox="0 0 32 24" class="mark" aria-hidden="true">
+      <path d="M2 12 C8 4 18 4 24 12 C18 20 8 20 2 12 Z"/>
+      <path d="M24 12 L31 6 L31 18 Z"/><circle cx="8" cy="10" r="1.6" class="eye"/>
+    </svg>
+    <div>
+      <h1>Natun Bari Pond</h1>
+      <p id="stamp">loading</p>
+    </div>
   </div>
-  <div class="topbtns">
-    <button id="installBtn" class="ghost hidden" title="Install app">Install</button>
-    <button id="themeBtn" class="ghost" title="Theme">◐</button>
+  <div class="topright">
+    <svg viewBox="0 0 40 16" class="miniswim" id="miniswim" aria-hidden="true">
+      <g class="fsh"><path d="M0 0 C4 -3 11 -3 15 0 C11 3 4 3 0 0 Z"/><path d="M2 0 L-5 -4 L-5 4 Z"/></g>
+    </svg>
+    <button id="themeBtn" class="icon" aria-label="Switch light and dark">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg>
+    </button>
   </div>
 </header>
 
-<main id="main">
-
-<!-- ============ DASHBOARD ============ -->
+<main>
+<!-- ==================== DASHBOARD ==================== -->
 <section class="view" id="v-dash">
-  <div id="tiles" class="tiles"></div>
 
-  <div class="card">
-    <h2>Where the fish money went</h2>
-    <p class="cap" id="fishCap"></p>
-    <div id="fishSplit" class="fsplit"></div>
-  </div>
+  <div class="chips" id="chips"></div>
 
-  <div class="card">
-    <h2>Where the money went</h2>
-    <p class="cap" id="costCap"></p>
-    <div id="donut"></div>
-  </div>
-
-  <div class="card">
-    <h2>Monthly running cost</h2>
-    <p class="cap">Lease excluded. The dashed line is the average.</p>
-    <div id="bars"></div>
-  </div>
-
-  <div class="card">
-    <h2>Partners</h2>
-    <p class="cap">Should invest against actually paid.</p>
-    <div id="partners"></div>
-  </div>
-
-  <div class="card">
-    <h2>Every month the pond needs</h2>
-    <p class="cap" id="planCap"></p>
-    <div id="plan"></div>
-  </div>
-
-  <div class="card">
-    <h2>Full history</h2>
-    <p class="cap">Every entry ever made, newest first.</p>
-    <div class="histbtns">
-      <button class="hist" data-h="expenses"><span>All expenses</span><b id="hcExp">–</b></button>
-      <button class="hist" data-h="investments"><span>All investments</span><b id="hcInv">–</b></button>
-      <button class="hist" data-h="payments"><span>All payments</span><b id="hcPay">–</b></button>
-      <button class="hist" data-h="sales"><span>All fish out</span><b id="hcSale">–</b></button>
+  <article class="card accent-mix">
+    <div class="chead">
+      <h2>How the business is going</h2>
+      <span class="tag" id="trendTag"></span>
     </div>
-  </div>
+    <p class="cap" id="trendCap"></p>
+    <div class="chart" id="trend"></div>
+    <div class="legend" id="trendLeg"></div>
+  </article>
+
+  <article class="card accent-sale">
+    <div class="chead"><h2>Getting the money back</h2><span class="tag" id="recTag"></span></div>
+    <div class="prog" id="recBar"></div>
+    <p class="cap" id="recCap"></p>
+    <div class="minirow" id="beRow"></div>
+  </article>
+
+  <article class="card accent-expense">
+    <div class="chead"><h2>Where the money went</h2><span class="tag" id="costTag"></span></div>
+    <div class="donutwrap"><div id="donut"></div><div class="dlist" id="dlist"></div></div>
+  </article>
+
+  <article class="card accent-sale">
+    <div class="chead"><h2>Fish out of the pond</h2><span class="tag" id="fishTag"></span></div>
+    <div class="seg" id="fishSeg"></div>
+    <div class="seglist" id="fishList"></div>
+  </article>
+
+  <article class="card accent-invest">
+    <div class="chead"><h2>Partners</h2><span class="tag" id="partTag"></span></div>
+    <div class="plist" id="plist"></div>
+  </article>
+
 </section>
 
-<!-- ============ ROUND ============ -->
-<section class="view hidden" id="v-round">
-  <div class="card">
-    <h2>Announce an investment round</h2>
-    <p class="cap">Enter the total the pond needs. It is split 40 / 40 / 20 automatically and written to the ledger and to each partner's due.</p>
-    <form id="f-round" class="form">
-      <label>Date<input type="date" name="date" required></label>
-      <label>What is it for<input name="purpose" list="purposes" value="Feed &amp; other cost" required></label>
-      <datalist id="purposes">
-        <option>Feed &amp; other cost</option><option>Lease Capital</option>
-        <option>Cleaning &amp; Fish buy</option><option>Medicine</option><option>Netting</option>
-      </datalist>
-      <label>Total amount the pond needs<input type="number" name="amount" min="1" step="1" inputmode="numeric" required></label>
-      <div class="split" id="roundSplit"></div>
-      <button class="primary" type="submit">Announce round</button>
-    </form>
+<!-- ==================== INVESTMENT ==================== -->
+<section class="view hidden" id="v-invest">
+  <div class="vhead accent-invest">
+    <div><h2>Investment call</h2><p>Money the partners are asked to put in.</p></div>
+    <button class="ghost hist" data-h="investments">History</button>
   </div>
+  <form id="f-invest" class="form card">
+    <label class="fld date"><span class="lbl">Date</span>
+      <span class="ctl"><i class="pre">📅</i><input type="date" name="date" required></span></label>
+
+    <label class="fld text"><span class="lbl">What is the money for</span>
+      <span class="ctl"><i class="pre">Aa</i><input name="purpose" placeholder="Feed, medicine, lease renewal" required></span>
+      <span class="hint">Description, not a number</span></label>
+
+    <label class="fld money"><span class="lbl">Total amount to raise</span>
+      <span class="ctl"><i class="pre">৳</i><input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="0" required></span>
+      <span class="hint">Taka. Split automatically 40 / 40 / 20</span></label>
+
+    <div class="splitbox" id="invSplit"></div>
+    <button class="primary" type="submit">Announce this investment</button>
+  </form>
 </section>
 
-<!-- ============ EXPENSE ============ -->
+<!-- ==================== EXPENSE ==================== -->
 <section class="view hidden" id="v-expense">
-  <div class="card">
-    <h2>Record an expense</h2>
-    <p class="cap">Money that has gone out of the pond.</p>
-    <form id="f-expense" class="form">
-      <label>Date<input type="date" name="date" required></label>
-      <label>Paid to<input name="payee" list="payees" placeholder="Mohd Ullah" required></label>
-      <datalist id="payees"></datalist>
-      <label>What was bought<input name="purpose" placeholder="Feed 5 Bag" required></label>
-      <label>Amount<input type="number" name="amount" min="1" step="1" inputmode="numeric" required></label>
-      <label>Remarks <span class="opt">optional</span><input name="remarks"></label>
-      <button class="primary" type="submit">Save expense</button>
-    </form>
+  <div class="vhead accent-expense">
+    <div><h2>Expense</h2><p>Money already spent on the pond.</p></div>
+    <button class="ghost hist" data-h="expenses">History</button>
   </div>
+  <form id="f-expense" class="form card">
+    <label class="fld date"><span class="lbl">Date</span>
+      <span class="ctl"><i class="pre">📅</i><input type="date" name="date" required></span></label>
+
+    <label class="fld text"><span class="lbl">Paid to</span>
+      <span class="ctl"><i class="pre">Aa</i><input name="payee" placeholder="Mohd Ullah" required></span>
+      <span class="hint">Person or shop name</span></label>
+
+    <label class="fld text"><span class="lbl">What was bought</span>
+      <span class="ctl"><i class="pre">Aa</i><input name="purpose" placeholder="Feed 5 Bag" required></span>
+      <span class="hint">Description</span></label>
+
+    <label class="fld money"><span class="lbl">Amount</span>
+      <span class="ctl"><i class="pre">৳</i><input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="0" required></span>
+      <span class="hint">Taka</span></label>
+
+    <label class="fld text"><span class="lbl">Comment <em>optional</em></span>
+      <span class="ctl"><i class="pre">Aa</i><input name="comment" placeholder="Anything worth remembering"></span></label>
+
+    <button class="primary" type="submit">Save expense</button>
+  </form>
 </section>
 
-<!-- ============ SALE ============ -->
+<!-- ==================== SALE ==================== -->
 <section class="view hidden" id="v-sale">
-  <div class="card">
-    <h2>Record fish leaving the pond</h2>
-    <p class="cap">Sold to a buyer, or eaten by the partners. Eaten fish counts as income but never as cash.</p>
-    <form id="f-sale" class="form">
-      <label>Date<input type="date" name="date" required></label>
-      <label>What happened to the money
-        <select name="type">
-          <option value="Sold/Reinvested">Sold, money stays in the pond</option>
-          <option value="Income">Sold, cash shared out to the partners</option>
-          <option value="Eaten">Eaten by the partners</option>
-        </select></label>
-      <label>Buyer and fish species<input name="buyer" placeholder="Badsa - Gras, Rou, Mrig" required></label>
-      <div class="row">
-        <label>Weight in kg<input type="number" name="kg" min="0.1" step="0.1" inputmode="decimal" required></label>
-        <label>Rate per kg<input type="number" name="rate" min="1" step="1" inputmode="numeric" value="200" required></label>
-      </div>
-      <label>Discount <span class="opt">if the buyer paid less</span>
-        <input type="number" name="discount" min="0" step="1" inputmode="numeric" value="0"></label>
-      <label>Remarks <span class="opt">optional</span><input name="remarks"></label>
-      <div class="split" id="saleCalc"></div>
-      <button class="primary" type="submit">Save sale</button>
-    </form>
+  <div class="vhead accent-sale">
+    <div><h2>Fish out</h2><p>Sold, shared as cash, or eaten.</p></div>
+    <button class="ghost hist" data-h="sales">History</button>
   </div>
+  <form id="f-sale" class="form card">
+    <label class="fld date"><span class="lbl">Date</span>
+      <span class="ctl"><i class="pre">📅</i><input type="date" name="date" required></span></label>
+
+    <label class="fld pick"><span class="lbl">What happened</span>
+      <span class="ctl"><i class="pre">☰</i><select name="type">
+        <option value="Sold/Reinvested">Sold, money stays in the pond</option>
+        <option value="Income">Sold, cash shared out to the partners</option>
+        <option value="Eaten">Fish eaten by partners</option>
+      </select><i class="post">▾</i></span>
+      <span class="hint">Choose one</span></label>
+
+    <label class="fld text"><span class="lbl">Description</span>
+      <span class="ctl"><i class="pre">Aa</i><input name="description" placeholder="Buyer name, fish species" required></span></label>
+
+    <div class="row">
+      <label class="fld qty"><span class="lbl">Weight</span>
+        <span class="ctl"><i class="pre">⚖</i><input type="number" name="kg" min="0.1" step="0.1" inputmode="decimal" placeholder="0" required><i class="post">kg</i></span></label>
+      <label class="fld money"><span class="lbl">Rate per kg</span>
+        <span class="ctl"><i class="pre">৳</i><input type="number" name="rate" min="1" step="1" inputmode="numeric" value="200" required></span></label>
+    </div>
+
+    <label class="fld money"><span class="lbl">Discount <em>optional</em></span>
+      <span class="ctl"><i class="pre">৳</i><input type="number" name="discount" min="0" step="1" inputmode="numeric" value="0"></span>
+      <span class="hint">If the buyer paid less than the full rate</span></label>
+
+    <label class="fld text"><span class="lbl">Comment <em>optional</em></span>
+      <span class="ctl"><i class="pre">Aa</i><input name="comment"></span></label>
+
+    <div class="splitbox" id="saleCalc"></div>
+    <button class="primary" type="submit">Save</button>
+  </form>
 </section>
 
-<!-- ============ PAYMENTS ============ -->
+<!-- ==================== PAYMENTS ==================== -->
 <section class="view hidden" id="v-pay">
-  <div class="card">
-    <h2>Record a partner payment</h2>
-    <p class="cap">Money handed to Rafique. Rafique funds his own share automatically, so he is not listed here.</p>
-    <form id="f-pay" class="form">
-      <label>Partner<select name="partner" id="paySel"></select></label>
-      <label>Date<input type="date" name="date" required></label>
-      <label>Amount<input type="number" name="amount" min="1" step="1" inputmode="numeric" required></label>
-      <label class="check"><input type="checkbox" name="refund"> This is money returned to him, not received</label>
-      <div class="split" id="payState"></div>
-      <button class="primary" type="submit">Save payment</button>
-    </form>
+  <div class="vhead accent-pay">
+    <div><h2>Payment received</h2><p>Cash a partner actually handed to Rafique.</p></div>
+    <button class="ghost hist" data-h="payments">History</button>
   </div>
-</section>
+  <form id="f-pay" class="form card">
+    <label class="fld pick"><span class="lbl">Who paid</span>
+      <span class="ctl"><i class="pre">☰</i><select name="partner" id="paySel"></select><i class="post">▾</i></span>
+      <span class="hint">Choose one</span></label>
 
+    <label class="fld date"><span class="lbl">Date</span>
+      <span class="ctl"><i class="pre">📅</i><input type="date" name="date" required></span></label>
+
+    <label class="fld money"><span class="lbl">Amount received</span>
+      <span class="ctl"><i class="pre">৳</i><input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="0" required></span>
+      <span class="hint">Taka</span></label>
+
+    <div class="splitbox" id="payState"></div>
+    <button class="primary" type="submit">Save payment</button>
+  </form>
+</section>
 </main>
 
-<nav class="tabs" id="tabs">
+<nav id="tabs" class="tabs">
   <button data-v="dash" class="on"><svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6V11h-6v9Zm0-16v5h6V4h-6Z"/></svg><span>Dashboard</span></button>
-  <button data-v="round" class="lockable"><svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Zm0 8.5L4.2 6.6 12 2.7l7.8 3.9L12 10.5ZM2 17l10 5 10-5-2.2-1.1L12 19.5 4.2 15.9 2 17Zm0-5 10 5 10-5-2.2-1.1L12 14.5 4.2 10.9 2 12Z"/></svg><span>Round</span></button>
-  <button data-v="expense" class="lockable"><svg viewBox="0 0 24 24"><path d="M19 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 12H5V7h14v10Zm-8-2h2v-2h2v-2h-2V9h-2v2H9v2h2v2Z"/></svg><span>Expense</span></button>
-  <button data-v="sale" class="lockable"><svg viewBox="0 0 24 24"><path d="M16 6c-3.9 0-7.3 2-9.2 5 .6 1 1.4 1.9 2.3 2.6L6 17l4.6-1.4c1.6.9 3.5 1.4 5.4 1.4 3.3 0 6-2.5 6-5.5S19.3 6 16 6Zm2 4.6a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Z"/></svg><span>Sale</span></button>
-  <button data-v="pay" class="lockable"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-8 1.7-8 4v2h16v-2c0-2.3-4.7-4-8-4Z"/></svg><span>Payments</span></button>
+  <button data-v="invest"><svg viewBox="0 0 24 24"><path d="M12 2 2 8v2h20V8L12 2Zm-7 10v6H3v2h18v-2h-2v-6h-2v6h-3v-6h-2v6H7v-6H5Z"/></svg><span>Invest</span></button>
+  <button data-v="expense"><svg viewBox="0 0 24 24"><path d="M3 6h18v3H3V6Zm0 5h18v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7Zm4 3v2h6v-2H7Z"/></svg><span>Expense</span></button>
+  <button data-v="sale"><svg viewBox="0 0 24 24"><path d="M2 12c4-6 11-6 15 0-4 6-11 6-15 0Zm15 0 5-4v8l-5-4Z"/></svg><span>Fish</span></button>
+  <button data-v="pay"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-1.1a3 3 0 0 1-2.3-2.2l1.9-.5a1.2 1.2 0 0 0 1.2.9c.7 0 1.1-.3 1.1-.8s-.4-.7-1.6-1c-1.6-.4-2.5-1-2.5-2.4a2.7 2.7 0 0 1 2.2-2.6V6h2v1.3a2.9 2.9 0 0 1 2.1 2l-1.9.6a1.1 1.1 0 0 0-1.1-.8c-.6 0-1 .3-1 .7s.5.6 1.7 1c1.6.4 2.4 1.1 2.4 2.5A2.8 2.8 0 0 1 13 15.9V17Z"/></svg><span>Payments</span></button>
 </nav>
 
-
-<div class="histview hidden" id="histView">
-  <div class="histTop">
-    <button id="histBack" class="ghost">‹ Back</button>
-    <strong id="histTitle">History</strong>
-    <span id="histTotal"></span>
+<!-- ==================== SLIDE-UP SHEET (history + edit) ==================== -->
+<div class="scrim hidden" id="scrim"></div>
+<section class="sheet hidden" id="sheet" role="dialog" aria-modal="true">
+  <div class="shead">
+    <button class="ghost" id="sheetBack">Close</button>
+    <h2 id="sheetTitle">History</h2>
+    <span class="tag" id="sheetTag"></span>
   </div>
-  <div class="histBody" id="histBody"></div>
-</div>
+  <div class="sbody" id="sheetBody"></div>
+</section>
 
+<div class="toast hidden" id="toast"></div>
+
+<!-- ==================== FIRST-OPEN GATE ==================== -->
 <div class="gate" id="gate">
   <div class="gateBox">
-    <img src="icons/icon-192.png" alt="" width="66" height="66">
-    <h1>Natun Bari Pond</h1>
-    <p class="gp">Enter the passcode to add entries.<br>Or continue as a viewer to see the dashboard only.</p>
+    <svg viewBox="0 0 32 24" class="mark big" aria-hidden="true">
+      <path d="M2 12 C8 4 18 4 24 12 C18 20 8 20 2 12 Z"/>
+      <path d="M24 12 L31 6 L31 18 Z"/><circle cx="8" cy="10" r="1.6" class="eye"/>
+    </svg>
+    <h2>Natun Bari Pond</h2>
+    <p>Enter the passcode to add or change entries.<br>Or continue as a viewer to see the dashboard only.</p>
     <input type="password" id="gatePin" inputmode="numeric" placeholder="Passcode" autocomplete="current-password">
     <button class="primary" id="gateGo">Unlock full access</button>
     <button class="linkbtn" id="gateSkip">Continue without password</button>
     <p class="err hidden" id="gateErr"></p>
   </div>
 </div>
-
-<div class="toast hidden" id="toast"></div>
 
 <script src="app.js"></script>
 </body>

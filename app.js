@@ -1,72 +1,65 @@
 /* ================= CONFIG =================
    Paste the Apps Script web app URL here after you deploy it.
-   It looks like: https://script.google.com/macros/s/AKfy..../exec
 ========================================== */
 const API = 'https://script.google.com/macros/s/AKfycbx0SGQQjuFexwJJNSY3HfOE5BoS-dTOTOWOjVjgTiEy9NycaDyDrQC5mcCxrz50g3ponQ/exec';
 const SHARES = { Rafique: 0.40, Anwar: 0.40, Shahidullah: 0.20 };
+const T = { sold: 'Sold/Reinvested', eaten: 'Eaten', income: 'Income' };
 
-/* ---------- tiny helpers ---------- */
-const $ = s => document.querySelector(s);
+/* ---------- helpers ---------- */
+const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
-const f = n => Math.round(n).toLocaleString('en-US');
-const NS = 'http://www.w3.org/2000/svg';
-const el = (t, a = {}) => { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); return n; };
+const f  = n => Math.round(n || 0).toLocaleString('en-US');
+const fk = n => Math.abs(n) >= 1000 ? Math.round(n / 1000) + 'k' : String(Math.round(n));
 const today = () => new Date().toISOString().slice(0, 10);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const monthName = k => { const [y, m] = k.split('-'); return MON[+m - 1] + ' ' + y; };
 let DATA = null;
-let PIN  = localStorage.getItem('pondpin') || '';
-let MODE = localStorage.getItem('pondmode') || '';   // '' | 'admin' | 'view'
 
 function toast(msg, bad) {
-  const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : '');
-  clearTimeout(t._t); t._t = setTimeout(() => t.classList.add('hidden'), 3400);
+  const t = $('#toast');
+  t.textContent = msg; t.classList.toggle('bad', !!bad); t.classList.remove('hidden');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 2600);
 }
 
 /* ---------- theme ---------- */
+const savedTheme = localStorage.getItem('pondtheme');
+if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
 $('#themeBtn').onclick = () => {
-  const cur = document.documentElement.getAttribute('data-theme');
-  const dark = cur === 'dark' || (!cur && matchMedia('(prefers-color-scheme:dark)').matches);
-  document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
-  localStorage.setItem('pondtheme', dark ? 'light' : 'dark');
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const cur = document.documentElement.getAttribute('data-theme') || (dark ? 'dark' : 'light');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('pondtheme', next);
+  if (DATA) render();
 };
-if (localStorage.getItem('pondtheme')) document.documentElement.setAttribute('data-theme', localStorage.getItem('pondtheme'));
 
-/* ---------- access mode ---------- */
-function signedIn() { return MODE === 'admin' && !!PIN; }
+/* ---------- access ---------- */
+let PIN  = localStorage.getItem('pondpin')  || '';
+let MODE = localStorage.getItem('pondmode') || '';   // '' | 'admin' | 'view'
+const signedIn = () => MODE === 'admin' && !!PIN;
 
 function applyMode() {
-  const admin = signedIn();
-  document.body.classList.toggle('viewonly', !admin);
-  if (!admin) show('dash');
+  document.body.classList.toggle('viewonly', !signedIn());
+  if (!signedIn()) show('dash', false);
 }
-
-/* Hidden way back to the passcode screen: tap the app name three times.
-   There is no visible key, as asked. Without this a viewer could never unlock. */
-let taps = 0, tapT = null;
-document.querySelector('.brand').addEventListener('click', () => {
-  taps++; clearTimeout(tapT); tapT = setTimeout(() => taps = 0, 900);
-  if (taps >= 3) { taps = 0; openGate(true); }
-});
-
 function openGate(force) {
+  $('#gate').classList.remove('hidden');
   $('#gateErr').classList.add('hidden');
   $('#gatePin').value = '';
-  $('#gate').classList.remove('hidden');
   $('#gateSkip').textContent = force ? 'Cancel, stay as viewer' : 'Continue without password';
-  setTimeout(() => $('#gatePin').focus(), 120);
 }
-function closeGate() { $('#gate').classList.add('hidden'); }
+const closeGate = () => $('#gate').classList.add('hidden');
 
 $('#gateSkip').onclick = () => {
   MODE = 'view'; PIN = '';
   localStorage.setItem('pondmode', 'view'); localStorage.removeItem('pondpin');
   closeGate(); applyMode();
 };
-
 $('#gatePin').addEventListener('keydown', e => { if (e.key === 'Enter') $('#gateGo').click(); });
-
 $('#gateGo').onclick = async () => {
   const v = $('#gatePin').value.trim();
-  if (!v) { $('#gateErr').textContent = 'Type the passcode, or continue as a viewer.'; $('#gateErr').classList.remove('hidden'); return; }
+  if (!v) { gateErr('Type the passcode, or continue as a viewer.'); return; }
   $('#gateGo').disabled = true; $('#gateGo').textContent = 'Checking…';
   const r = await post({ action: 'check', pin: v });
   $('#gateGo').disabled = false; $('#gateGo').textContent = 'Unlock full access';
@@ -74,47 +67,31 @@ $('#gateGo').onclick = async () => {
     PIN = v; MODE = 'admin';
     localStorage.setItem('pondpin', v); localStorage.setItem('pondmode', 'admin');
     closeGate(); applyMode(); toast('Full access unlocked.');
-  } else {
-    $('#gateErr').textContent = r.error || 'That passcode did not work.';
-    $('#gateErr').classList.remove('hidden');
-  }
+  } else gateErr(r.error || 'That passcode did not work.');
 };
-
-/* ---------- install to home screen ---------- */
-let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault(); deferredPrompt = e; $('#installBtn').classList.remove('hidden');
-});
-$('#installBtn').onclick = async () => {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt(); await deferredPrompt.userChoice;
-  deferredPrompt = null; $('#installBtn').classList.add('hidden');
-};
-window.addEventListener('appinstalled', () => $('#installBtn').classList.add('hidden'));
+function gateErr(m) { $('#gateErr').textContent = m; $('#gateErr').classList.remove('hidden'); }
 
 /* ---------- network ---------- */
 async function post(body) {
-  if (API.includes('PASTE_YOUR')) return { ok: false, error: 'The app is not connected to the sheet yet. Set API in app.js.' };
   try {
-    const res = await fetch(API, { method: 'POST', body: JSON.stringify(body),
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' } });   // text/plain avoids a CORS preflight
+    const res = await fetch(API, {
+      method: 'POST', body: JSON.stringify(body),
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }   // avoids a CORS preflight
+    });
     return await res.json();
   } catch (e) { return { ok: false, error: 'Could not reach the sheet. Check your connection.' }; }
 }
+
 let loading = false, lastLoad = 0;
 async function load(silent) {
   const now = Date.now();
-  if (loading || (silent && now - lastLoad < 3000)) return;   // no duplicate calls
+  if (loading || (silent && now - lastLoad < 3000)) return;
   loading = true; lastLoad = now;
-  try { await doLoad(silent); } finally { loading = false; }
+  document.body.classList.add('syncing');
+  try { await doLoad(silent); }
+  finally { loading = false; document.body.classList.remove('syncing'); }
 }
 async function doLoad(silent) {
-  if (API.includes('PASTE_YOUR')) {
-    const c = localStorage.getItem('ponddata');
-    if (c) { DATA = JSON.parse(c); render(); }
-    $('#stamp').textContent = 'not connected to the sheet yet';
-    return;
-  }
   try {
     const res = await fetch(API + '?t=' + Date.now());
     const j = await res.json();
@@ -122,244 +99,424 @@ async function doLoad(silent) {
     else if (!silent) toast(j.error || 'Could not read the sheet', true);
   } catch (e) {
     const c = localStorage.getItem('ponddata');
-    if (c) { DATA = JSON.parse(c); render(); $('#stamp').textContent = 'offline · showing last saved copy'; }
+    if (c) { DATA = JSON.parse(c); render(); $('#stamp').textContent = 'offline · last saved copy'; }
     else if (!silent) toast('Offline and nothing saved yet', true);
   }
 }
 
-/* ---------- navigation ---------- */
-let pendingTab = null;
-function show(v) {
+/* ================= NAVIGATION =================
+   Every view and every sheet gets a history entry, so the phone's back
+   button walks back through the app instead of closing it. */
+let VIEW = 'dash';
+function show(v, push) {
+  VIEW = v;
   $$('.view').forEach(s => s.classList.add('hidden'));
-  $('#v-' + v).classList.remove('hidden');
+  const el = $('#v-' + v); if (el) el.classList.remove('hidden');
   $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  window.scrollTo(0, 0);
+  scrollTo(0, 0);
+  if (push !== false) history.pushState({ v }, '', '#' + v);
 }
 $$('#tabs button').forEach(b => b.onclick = () => {
   const v = b.dataset.v;
   if (v !== 'dash' && !signedIn()) { openGate(true); return; }
-  show(v);
+  if (v !== VIEW) show(v);
 });
+
+addEventListener('popstate', e => {
+  const st = e.state || {};
+  const wantDepth = st.sheet || 0;
+  if (wantDepth < SHEETS.length) { SHEETS.length = wantDepth; paintSheet(); }
+  const v = st.v || 'dash';
+  if (v !== VIEW) show(v, false);
+});
+
+/* ================= SLIDE-UP SHEET =================
+   A stack, so History then Edit is two steps and the phone's back button
+   walks Edit -> History -> the screen behind it, one press at a time. */
+let SHEETS = [];
+function openSheet(title, tag, html, wire) {
+  SHEETS.push({ title: title, tag: tag, html: html, wire: wire });
+  paintSheet();
+  history.pushState({ v: VIEW, sheet: SHEETS.length }, '', '#' + VIEW);
+}
+function paintSheet() {
+  const s = SHEETS[SHEETS.length - 1];
+  if (!s) {
+    $('#sheet').classList.add('hidden');
+    $('#scrim').classList.add('hidden');
+    return;
+  }
+  $('#sheetTitle').textContent = s.title;
+  $('#sheetTag').textContent = s.tag || '';
+  $('#sheetTag').classList.toggle('hidden', !s.tag);
+  $('#sheetBody').innerHTML = s.html;
+  $('#sheet').classList.remove('hidden');
+  $('#scrim').classList.remove('hidden');
+  $('#sheetBody').scrollTop = 0;
+  $('#sheetBack').textContent = SHEETS.length > 1 ? 'Back' : 'Close';
+  if (s.wire) s.wire();
+}
+function closeSheet() {
+  const n = SHEETS.length;
+  if (!n) return;
+  SHEETS = []; paintSheet();
+  history.go(-n);
+}
+$('#sheetBack').onclick = () => { if (SHEETS.length > 1) history.back(); else closeSheet(); };
+$('#scrim').onclick = () => closeSheet();
 
 /* ================= RENDER ================= */
 function render() {
   if (!DATA) return;
   const s = DATA.summary;
-  $('#stamp').textContent = 'updated ' + new Date(DATA.updated).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  $('#stamp').textContent = 'updated ' + new Date(DATA.updated)
+    .toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-  /* tiles */
-  $('#tiles').innerHTML = [
-    ['Cash in hand', f(s.cash), 'with Rafique right now', ''],
-    ['Total invested', f(s.projected), 'by all partners', ''],
-    ['Fish revenue', f(s.revenue), s.kgTotal.toFixed(1) + ' kg out of the pond', ''],
-    ['Total cost', f(s.cost), 'since the pond started', ''],
-    ['Profit / Loss', f(s.profit), 'lease charged in full to year one', s.profit < 0 ? 'neg' : 'pos'],
-    ['Fish in pond', f(s.stock), 'estimate, not in the profit line', '']
-  ].map(([k, v, n, c]) => `<div class="tile"><div class="k">${k}</div><div class="v ${c}">${v}</div><div class="n">${n}</div></div>`).join('');
-
-  /* fish money three ways */
-  $('#fishCap').textContent = `Fish revenue ${f(s.revenue)} from ${s.kgTotal.toFixed(1)} kg. Only the first line is still pond cash.`;
-  $('#fishSplit').innerHTML = [
-    ['Stayed in the pond', s.reinvested, s.kgSold, 'Sold and spent back on feed, medicine and labour.'],
-    ['Shared out as cash', s.income, s.kgIncome, 'Sold and handed to the partners 40 / 40 / 20.'],
-    ['Taken as fish', s.eaten, s.kgEaten, 'Eaten by the partners. Counted as income, never as cash.']
-  ].map(([k, v, kg, n]) => `<div class="frow"><div class="fk">${k}</div><div class="fv">${f(v)}</div><div class="fkg">${kg.toFixed(1)} kg</div><div class="fn">${n}</div></div>`).join('');
-
-  /* donut */
-  $('#costCap').textContent = `Total cost ${f(s.cost)}. Biggest single item: ${DATA.categories[0] ? DATA.categories[0].label.toLowerCase() : '—'}.`;
-  drawDonut(DATA.categories, s.cost);
-
-  /* monthly bars */
-  drawBars(DATA.byMonth.map(m => ({ m: m.m, v: m.cost })), s.runPerMonth, s.lease);
-
-  /* partners */
-  $('#partners').innerHTML = '<table><tr><th>Partner</th><th>Should</th><th>Paid</th><th>Due</th><th>Got fish</th><th>Got cash</th></tr>' +
-    DATA.partners.map((p, i) => `<tr><td><span class="dot" style="background:var(--s${i + 1})"></span>${p.name}</td>
-      <td>${f(p.should)}</td><td>${f(p.paid)}</td>
-      <td class="${p.due > 0 ? 'neg' : p.due < 0 ? 'pos' : ''}">${f(p.due)}</td>
-      <td>${f(p.fish)}</td><td>${f(p.money || 0)}</td></tr>`).join('') +
-    `<tr><td><b>Total</b></td><td><b>${f(sum(DATA.partners, 'should'))}</b></td>
-      <td><b>${f(sum(DATA.partners, 'paid'))}</b></td><td><b>${f(sum(DATA.partners, 'due'))}</b></td>
-      <td><b>${f(sum(DATA.partners, 'fish'))}</b></td><td><b>${f(DATA.partners.reduce((a,x)=>a+(x.money||0),0))}</b></td></tr></table>`;
-
-  /* monthly plan */
-  $('#planCap').textContent = `Running ${f(s.runPerMonth)} plus the lease share ${f(s.leasePerMonth)}. To break even the pond must produce about ${s.breakEvenKg} kg a month at ${s.rate} taka.`;
-  $('#plan').innerHTML = '<table><tr><th>Partner</th><th>Share</th><th>Per month</th><th>Next 12 months</th></tr>' +
-    DATA.partners.map((p, i) => `<tr><td><span class="dot" style="background:var(--s${i + 1})"></span>${p.name}</td>
-      <td>${Math.round(p.share * 100)}%</td><td>${f(s.trueMonth * p.share)}</td><td>${f(s.trueMonth * 12 * p.share)}</td></tr>`).join('') +
-    `<tr><td><b>Pond total</b></td><td></td><td><b>${f(s.trueMonth)}</b></td><td><b>${f(s.trueMonth * 12)}</b></td></tr></table>`;
-
-  /* history counts */
-  const pays = DATA.partners.reduce((a, p) => a + (p.payments ? p.payments.length : 0), 0);
-  $('#hcExp').textContent  = DATA.expenses.length + ' entries';
-  $('#hcInv').textContent  = DATA.investments.length + ' entries';
-  $('#hcPay').textContent  = pays + ' entries';
-  $('#hcSale').textContent = DATA.sales.length + ' entries';
-
-  /* payee suggestions + partner select */
-  const payees = [...new Set(DATA.expenses.map(e => e.payee).filter(Boolean))].sort();
-  $('#payees').innerHTML = payees.map(p => `<option>${esc(p)}</option>`).join('');
-  const sel = $('#paySel');
-  if (sel.options.length === 0)
-    sel.innerHTML = DATA.partners.filter(p => !p.manager).map(p => `<option>${p.name}</option>`).join('');
+  drawChips(s);
+  drawTrend(s);
+  drawRecovery(s);
+  drawDonut(s);
+  drawFish(s);
+  drawPartners(s);
+  fillPartnerSelect();
   updatePayState();
 }
-const sum = (a, k) => a.reduce((x, y) => x + y[k], 0);
-const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
-/* ---------- charts ---------- */
-function drawDonut(cats, total) {
-  const box = $('#donut'); box.innerHTML = '';
-  if (!cats.length) { box.innerHTML = '<p class="cap">No cost recorded yet.</p>'; return; }
-  const top = cats.slice(0, 4);
-  const rest = cats.slice(4).reduce((a, b) => a + b.value, 0);
-  if (rest > 0) top.push({ label: 'Other', value: rest });
-  const cols = ['--o1', '--o2', '--o3', '--o4', '--o5'];
-  const W = 340, H = 62 + top.length * 30, cx = 78, cy = 78, R = 66, r = 40;
-  const svg = el('svg', { viewBox: `0 0 ${W} ${Math.max(H, 168)}`, class: 'chart', role: 'img', 'aria-label': 'Cost breakdown' });
-  let ang = -Math.PI / 2;
-  top.forEach((d, i) => {
-    const sw = d.value / total * Math.PI * 2, e2 = ang + sw, big = sw > Math.PI ? 1 : 0;
-    svg.appendChild(el('path', {
-      d: `M ${cx + R * Math.cos(ang)} ${cy + R * Math.sin(ang)} A ${R} ${R} 0 ${big} 1 ${cx + R * Math.cos(e2)} ${cy + R * Math.sin(e2)} L ${cx + r * Math.cos(e2)} ${cy + r * Math.sin(e2)} A ${r} ${r} 0 ${big} 0 ${cx + r * Math.cos(ang)} ${cy + r * Math.sin(ang)} Z`,
-      fill: `var(${cols[i]})`, stroke: 'var(--surface)', 'stroke-width': 2
-    }));
-    ang = e2;
-  });
-  const t1 = el('text', { x: cx, y: cy - 1, 'text-anchor': 'middle', fill: 'var(--ink)', 'font-size': '15' }); t1.textContent = f(total);
-  const t2 = el('text', { x: cx, y: cy + 14, 'text-anchor': 'middle', class: 'ax' }); t2.textContent = 'total cost';
-  svg.append(t1, t2);
-  let y = 26;
-  top.forEach((d, i) => {
-    svg.appendChild(el('rect', { x: 170, y: y - 8, width: 10, height: 10, rx: 3, fill: `var(${cols[i]})` }));
-    const a = el('text', { x: 186, y: y, fill: 'var(--ink)', 'font-size': '12' }); a.textContent = d.label;
-    const b = el('text', { x: 186, y: y + 14, class: 'ax' }); b.textContent = `${f(d.value)} · ${(d.value / total * 100).toFixed(1)}%`;
-    svg.append(a, b); y += 30;
-  });
-  box.appendChild(svg);
+/* ---- stat chips ---- */
+function drawChips(s) {
+  const items = [
+    ['Cash in hand', f(s.cash), 'with Rafique', 'var(--pay)', ''],
+    ['Invested',     f(s.projected), 'by all partners', 'var(--invest)', ''],
+    ['Spent',        f(s.cost), 'since day one', 'var(--expense)', ''],
+    ['Profit / Loss', f(s.profit), s.profit < 0 ? 'still in the hole' : 'in the black',
+      s.profit < 0 ? 'var(--crit)' : 'var(--good)', s.profit < 0 ? 'neg' : 'pos']
+  ];
+  $('#chips').innerHTML = items.map(([k, v, n, c, cls]) =>
+    `<div class="chip" style="--c:${c}"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="n">${n}</div></div>`
+  ).join('');
 }
 
-function drawBars(months, avg, lease) {
-  const box = $('#bars'); box.innerHTML = '';
-  const m = months.map(d => ({ m: d.m, v: d.v })).filter(d => d.v >= 0);
-  if (!m.length) { box.innerHTML = '<p class="cap">No cost recorded yet.</p>'; return; }
-  // strip the lease from whichever month carries it
-  let stripped = false;
-  m.forEach(d => { if (!stripped && lease && d.v >= lease) { d.v -= lease; d.lease = true; stripped = true; } });
-  const W = 340, H = 150, P = { t: 10, r: 6, b: 24, l: 34 }, n = m.length;
-  const max = Math.max(...m.map(d => d.v), avg) * 1.15 || 1;
-  const y = v => H - P.b - v / max * (H - P.t - P.b);
-  const step = (W - P.l - P.r) / n, bw = Math.max(3, step - 3);
-  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img', 'aria-label': 'Monthly running cost' });
-  for (let i = 0; i <= 2; i++) {
-    const v = max * i / 2;
-    svg.appendChild(el('line', { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), stroke: 'var(--grid)', 'stroke-width': 1 }));
-    const t = el('text', { x: P.l - 5, y: y(v) + 3, 'text-anchor': 'end', class: 'ax' });
-    t.textContent = Math.round(v / 1000) + 'k'; svg.appendChild(t);
-  }
-  svg.appendChild(el('line', { x1: P.l, x2: W - P.r, y1: y(avg), y2: y(avg), stroke: 'var(--s2)', 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }));
-  m.forEach((d, i) => {
-    const bx = P.l + i * step + 1.5;
-    svg.appendChild(el('rect', { x: bx, y: y(d.v), width: bw, height: Math.max(1.5, H - P.b - y(d.v)), rx: 3, fill: 'var(--s1)' }));
-    if (n <= 8 || i % Math.ceil(n / 7) === 0) {
-      const t = el('text', { x: bx + bw / 2, y: H - P.b + 13, 'text-anchor': 'middle', class: 'ax' });
-      t.textContent = d.m.slice(2).replace('-', '/'); svg.appendChild(t);
-    }
+/* ---- how the business is going ---- */
+function drawTrend(s) {
+  const M = DATA.byMonth || [];
+  if (M.length < 2) { $('#trend').innerHTML = '<p class="cap">Not enough months yet.</p>'; return; }
+
+  let co = 0, re = 0;
+  const pts = M.map(m => {
+    co += m.cost; re += m.rev;
+    return { m: m.m, cost: co, rev: re };
   });
-  const at = el('text', { x: W - P.r, y: y(avg) - 4, 'text-anchor': 'end', 'font-size': '9.5', fill: 'var(--s2)' });
-  at.textContent = 'avg ' + f(avg); svg.appendChild(at);
-  box.appendChild(svg);
+  const max = Math.max(...pts.map(p => p.cost)) || 1;
+  const W = 320, H = 132, PL = 30, PR = 6, PT = 10, PB = 18;
+  const x = i => PL + (W - PL - PR) * (pts.length === 1 ? 0 : i / (pts.length - 1));
+  const y = v => PT + (H - PT - PB) * (1 - v / max);
+
+  const line = key => pts.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p[key]).toFixed(1)).join(' ');
+  const gap = line('cost') + ' ' + pts.slice().reverse()
+    .map((p, i) => 'L' + x(pts.length - 1 - i).toFixed(1) + ' ' + y(p.rev).toFixed(1)).join(' ') + ' Z';
+
+  const ticks = [0, max / 2, max];
+  const lastI = pts.length - 1;
+  const labelIdx = [0, Math.floor(lastI / 2), lastI];
+
+  $('#trend').innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Money spent against money earned">
+    ${ticks.map(t => `<line class="gridline" x1="${PL}" x2="${W - PR}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}"/>
+      <text class="axis" x="${PL - 4}" y="${(y(t) + 3).toFixed(1)}" text-anchor="end">${fk(t)}</text>`).join('')}
+    <path d="${gap}" fill="var(--expense)" opacity=".13"/>
+    <path d="${line('cost')}" fill="none" stroke="var(--expense)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="${line('rev')}"  fill="none" stroke="var(--sale)"    stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${x(lastI).toFixed(1)}" cy="${y(pts[lastI].cost).toFixed(1)}" r="3.2" fill="var(--expense)"/>
+    <circle cx="${x(lastI).toFixed(1)}" cy="${y(pts[lastI].rev).toFixed(1)}"  r="3.2" fill="var(--sale)"/>
+    ${labelIdx.map(i => `<text class="axis" x="${x(i).toFixed(1)}" y="${H - 4}" text-anchor="${i === 0 ? 'start' : i === lastI ? 'end' : 'middle'}">${pts[i].m.slice(2).replace('-', '/')}</text>`).join('')}
+  </svg>`;
+
+  $('#trendLeg').innerHTML =
+    `<span><i style="background:var(--expense)"></i>Money spent ${f(s.cost)}</span>
+     <span><i style="background:var(--sale)"></i>Money earned ${f(s.revenue)}</span>`;
+
+  const gapNow = s.cost - s.revenue;
+  $('#trendCap').textContent = `The shaded gap is what the pond still owes itself: ${f(gapNow)} taka.`;
+  const tag = $('#trendTag');
+  tag.textContent = (s.profit < 0 ? '−' : '+') + f(Math.abs(s.profit));
+  tag.className = 'tag ' + (s.profit < 0 ? 'neg' : 'pos');
+}
+
+/* ---- getting the money back ---- */
+function drawRecovery(s) {
+  const pct = Math.max(0, Math.min(100, s.recovered || 0));
+  $('#recBar').innerHTML =
+    `<i style="width:${pct}%;background:var(--sale)"></i><i style="flex:1;background:transparent"></i>`;
+  $('#recTag').textContent = pct.toFixed(1) + '%';
+  $('#recTag').className = 'tag ' + (pct >= 100 ? 'pos' : '');
+  $('#recCap').textContent =
+    `Fish has paid back ${f(s.revenue)} of the ${f(s.cost)} spent. ${f(s.cost - s.revenue)} still to go.`;
+  $('#beRow').innerHTML = [
+    [f(s.trueMonth), 'Costs per month<br>running plus lease share'],
+    [s.breakEvenKg + ' kg', `To break even each month<br>at ${s.rate} taka a kg`],
+    [s.kgTotal.toFixed(0) + ' kg', `Produced in ${s.nMonths} months<br>${(s.kgTotal / s.nMonths).toFixed(1)} kg a month`]
+  ].map(([b, sp]) => `<div class="mini"><b>${b}</b><span>${sp}</span></div>`).join('');
+}
+
+/* ---- where the money went ---- */
+function drawDonut(s) {
+  const cats = (DATA.categories || []).slice(0, 4);
+  const restVal = (DATA.categories || []).slice(4).reduce((a, b) => a + b.value, 0);
+  const rows = restVal > 0 ? cats.concat([{ label: 'Other', value: restVal }]) : cats;
+  const ramp = ['var(--o1)', 'var(--o2)', 'var(--o3)', 'var(--o4)', 'var(--o5)'];
+  const total = s.cost || 1, R = 52, r = 33, C = 60;
+  let a0 = -Math.PI / 2, arcs = '';
+  rows.forEach((c, i) => {
+    const a1 = a0 + (c.value / total) * Math.PI * 2;
+    const big = a1 - a0 > Math.PI ? 1 : 0;
+    const p = (rad, ang) => [C + rad * Math.cos(ang), C + rad * Math.sin(ang)];
+    const [x1, y1] = p(R, a0), [x2, y2] = p(R, a1), [x3, y3] = p(r, a1), [x4, y4] = p(r, a0);
+    arcs += `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${R} ${R} 0 ${big} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} L${x3.toFixed(1)} ${y3.toFixed(1)} A${r} ${r} 0 ${big} 0 ${x4.toFixed(1)} ${y4.toFixed(1)} Z" fill="${ramp[i]}"/>`;
+    a0 = a1;
+  });
+  $('#donut').innerHTML =
+    `<svg viewBox="0 0 120 120" role="img" aria-label="Cost by category">${arcs}
+      <text x="60" y="58" text-anchor="middle" font-size="15" font-weight="700" fill="var(--ink)">${fk(s.cost)}</text>
+      <text x="60" y="71" text-anchor="middle" font-size="8" fill="var(--muted)">total spent</text></svg>`;
+  $('#dlist').innerHTML = rows.map((c, i) =>
+    `<div class="drow"><i style="background:${ramp[i]}"></i><span>${esc(c.label)}</span>
+      <b>${f(c.value)} <em>${(c.value / total * 100).toFixed(0)}%</em></b></div>`).join('');
+  $('#costTag').textContent = rows[0] ? rows[0].label + ' leads' : '';
+}
+
+/* ---- fish out of the pond ---- */
+function drawFish(s) {
+  const rows = [
+    { k: 'Stayed in the pond', v: s.reinvested, kg: s.kgSold,   c: 'var(--sale)',
+      n: 'Sold, and Rafique spent it back on the pond.' },
+    { k: 'Shared out as cash', v: s.income,     kg: s.kgIncome, c: 'var(--pay)',
+      n: 'Sold, and handed to the partners 40 / 40 / 20.' },
+    { k: 'Eaten by partners',  v: s.eaten,      kg: s.kgEaten,  c: 'var(--warn)',
+      n: 'No cash. Counted as income and split in kind.' }
+  ];
+  const tot = s.revenue || 1;
+  $('#fishSeg').innerHTML = rows.filter(r => r.v > 0).map(r =>
+    `<i style="width:${(r.v / tot * 100).toFixed(1)}%;background:${r.c}">${r.v / tot > .12 ? (r.v / tot * 100).toFixed(0) + '%' : ''}</i>`).join('');
+  $('#fishList').innerHTML = rows.map(r =>
+    `<div class="srow"><i style="background:${r.c}"></i><span>${r.k}</span>
+      <em>${r.kg.toFixed(1)} kg</em><b>${f(r.v)}</b><p>${r.n}</p></div>`).join('');
+  $('#fishTag').textContent = s.kgTotal.toFixed(0) + ' kg · ' + f(s.revenue);
+}
+
+/* ---- partners ---- */
+function drawPartners(s) {
+  $('#plist').innerHTML = (DATA.partners || []).map(p => {
+    const pct = p.should ? Math.min(100, p.paid / p.should * 100) : 0;
+    const settled = Math.abs(p.due) < 1;
+    return `<div class="prow">
+      <div class="ptop"><span class="pname">${esc(p.name)}${p.manager ? ' · manager' : ''}</span>
+        <span class="pshare">${Math.round(p.share * 100)}% share</span></div>
+      <div class="pbar"><i style="width:${pct.toFixed(1)}%"></i></div>
+      <div class="pgrid">
+        <div class="pcell"><b>${f(p.should)}</b><span>Should</span></div>
+        <div class="pcell"><b>${f(p.paid)}</b><span>Paid</span></div>
+        <div class="pcell ${settled ? 'ok' : 'due'}"><b>${settled ? '0' : f(p.due)}</b><span>Due</span></div>
+        <div class="pcell"><b>${f(p.fish + p.money)}</b><span>Got back</span></div>
+      </div></div>`;
+  }).join('');
+  $('#partTag').textContent = f(s.projected) + ' in total';
+}
+
+/* ================= HISTORY + EDIT ================= */
+const KINDS = {
+  investments: {
+    title: 'All investment calls', kind: 'investment', color: 'var(--invest)', bg: 'var(--investbg)',
+    rows: () => DATA.investments,
+    line: r => ({ t: r.purpose || 'Investment', s: r.who, a: f(r.amount), d: r.date, pill: r.who })
+  },
+  expenses: {
+    title: 'All expenses', kind: 'expense', color: 'var(--expense)', bg: 'var(--expensebg)',
+    rows: () => DATA.expenses,
+    line: r => ({ t: r.purpose || 'Expense', s: 'Paid to ' + (r.payee || '—'), a: f(r.amount), d: r.date, pill: r.comment })
+  },
+  sales: {
+    title: 'All fish out', kind: 'sale', color: 'var(--sale)', bg: 'var(--salebg)',
+    rows: () => DATA.sales,
+    line: r => ({ t: r.description || 'Fish', s: r.kg + ' kg at ' + r.rate, a: f(r.received), d: r.date,
+                  pill: r.type === T.eaten ? 'Eaten by partners' : r.type === T.income ? 'Cash shared out' : 'Stayed in the pond' })
+  },
+  payments: {
+    title: 'All payments', kind: 'payment', color: 'var(--pay)', bg: 'var(--paybg)',
+    rows: () => DATA.payments,
+    line: r => ({ t: r.partner, s: 'Paid to Rafique', a: f(r.amount), d: r.date, pill: '' })
+  }
+};
+
+$$('button.hist').forEach(b => b.onclick = () => openHist(b.dataset.h));
+
+function openHist(key) {
+  if (!DATA) { toast('Still loading', true); return; }
+  const K = KINDS[key];
+  const rows = (K.rows() || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (!rows.length) { openSheet(K.title, '', '<p class="empty">Nothing recorded yet.</p>'); return; }
+
+  const total = rows.reduce((a, b) => a + (b.amount != null ? b.amount : b.received), 0);
+  let html = '', last = '';
+  rows.forEach((r, i) => {
+    const g = (r.date || '').slice(0, 7);
+    if (g !== last) { last = g; html += `<p class="hgroup">${g ? monthName(g) : 'No date'}</p>`; }
+    const L = K.line(r);
+    html += `<button class="hrow" data-k="${key}" data-i="${i}" style="--k:${K.color};--kb:${K.bg}">
+      <span class="t">${esc(L.t)}</span>
+      <span class="a">${L.a}</span>
+      <svg class="pen" viewBox="0 0 24 24"><path d="M3 17.2V21h3.8L17.8 10 14 6.2 3 17.2ZM20.7 7.1a1 1 0 0 0 0-1.4l-2.4-2.4a1 1 0 0 0-1.4 0l-1.8 1.8L18.9 8.9l1.8-1.8Z"/></svg>
+      <span class="s">${esc(L.s)}</span><span class="d">${esc(L.d)}</span>
+      ${L.pill ? `<span class="pill">${esc(L.pill)}</span>` : ''}</button>`;
+  });
+  openSheet(K.title, rows.length + ' · ' + f(total), html, () => {
+    $$('#sheetBody .hrow').forEach(b => b.onclick = () => {
+      if (!signedIn()) { toast('Passcode needed to change entries', true); return; }
+      openEdit(key, rows[+b.dataset.i]);
+    });
+  });
+}
+
+/* ---- edit one row ---- */
+const FIELDS = {
+  investment: r => [
+    ['date',   'date',  'Date', r.date, {}],
+    ['pick',   'who',   'Whose share', r.who, { opts: (DATA.partnerNames || Object.keys(SHARES)) }],
+    ['text',   'purpose', 'What the money is for', r.purpose, {}],
+    ['money',  'amount', 'Amount', r.amount, {}]
+  ],
+  expense: r => [
+    ['date',  'date', 'Date', r.date, {}],
+    ['text',  'payee', 'Paid to', r.payee, {}],
+    ['text',  'purpose', 'What was bought', r.purpose, {}],
+    ['money', 'amount', 'Amount', r.amount, {}],
+    ['text',  'comment', 'Comment', r.comment, {}]
+  ],
+  sale: r => [
+    ['date', 'date', 'Date', r.date, {}],
+    ['pick', 'type', 'What happened', r.type, { opts: [
+      [T.sold, 'Sold, money stays in the pond'],
+      [T.income, 'Sold, cash shared out to the partners'],
+      [T.eaten, 'Fish eaten by partners']] }],
+    ['text',  'description', 'Description', r.description, {}],
+    ['qty',   'kg', 'Weight in kg', r.kg, {}],
+    ['money', 'rate', 'Rate per kg', r.rate, {}],
+    ['money', 'discount', 'Discount', r.discount, {}],
+    ['text',  'comment', 'Comment', r.comment, {}]
+  ],
+  payment: r => [
+    ['pick',  'partner', 'Who paid', r.partner, { opts: (DATA.partnerNames || []).filter(n => n !== 'Rafique') }],
+    ['date',  'date', 'Date', r.date, {}],
+    ['money', 'amount', 'Amount received', r.amount, {}]
+  ]
+};
+
+function fieldHTML(type, name, label, val, opt) {
+  const v = val == null ? '' : val;
+  if (type === 'pick') {
+    let list = (opt.opts || []).slice();
+    // Old rows can carry a name that is no longer in the list, such as Idris.
+    // Keep it, so editing a row never silently reassigns it to someone else.
+    const known = list.map(o => String(Array.isArray(o) ? o[0] : o));
+    if (v !== '' && known.indexOf(String(v)) < 0) list = [[v, v + ' (as written in the sheet)']].concat(list);
+    const opts = list.map(o => {
+      const [ov, ol] = Array.isArray(o) ? o : [o, o];
+      return `<option value="${esc(ov)}"${String(ov) === String(v) ? ' selected' : ''}>${esc(ol)}</option>`;
+    }).join('');
+    return `<label class="fld pick"><span class="lbl">${label}</span>
+      <span class="ctl"><i class="pre">☰</i><select name="${name}">${opts}</select><i class="post">▾</i></span></label>`;
+  }
+  if (type === 'date')
+    return `<label class="fld date"><span class="lbl">${label}</span>
+      <span class="ctl"><i class="pre">📅</i><input type="date" name="${name}" value="${esc(v)}"></span></label>`;
+  if (type === 'money')
+    return `<label class="fld money"><span class="lbl">${label}</span>
+      <span class="ctl"><i class="pre">৳</i><input type="number" step="1" inputmode="numeric" name="${name}" value="${esc(v)}"></span>
+      <span class="hint">Taka</span></label>`;
+  if (type === 'qty')
+    return `<label class="fld qty"><span class="lbl">${label}</span>
+      <span class="ctl"><i class="pre">⚖</i><input type="number" step="0.1" inputmode="decimal" name="${name}" value="${esc(v)}"><i class="post">kg</i></span></label>`;
+  return `<label class="fld text"><span class="lbl">${label}</span>
+    <span class="ctl"><i class="pre">Aa</i><input name="${name}" value="${esc(v)}"></span></label>`;
+}
+
+function openEdit(key, rec) {
+  const K = KINDS[key];
+  const fields = FIELDS[K.kind](rec).map(a => fieldHTML(...a)).join('');
+  const html = `<form class="form card accent-${K.kind === 'investment' ? 'invest' : K.kind}" id="f-edit"
+       style="--accent:${K.color}">
+      <p class="cap">This writes straight into the Google Sheet, row ${rec.row}. Nothing is kept anywhere else.</p>
+      ${fields}
+      <button class="primary" type="submit" style="background:${K.color}">Save the change</button>
+    </form>`;
+
+  openSheet('Edit entry', 'sheet row ' + rec.row, html, () => {
+    $('#f-edit').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const fm = ev.target, body = { action: 'edit', pin: PIN, kind: K.kind, row: rec.row };
+      [...fm.elements].forEach(el => { if (el.name) body[el.name] = el.value; });
+      if (K.kind === 'payment' && !body.partner) body.partner = rec.partner;
+      const btn = fm.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      const r = await post(body);
+      btn.disabled = false; btn.textContent = 'Save the change';
+      if (r.ok) {
+        DATA = r.data; localStorage.setItem('ponddata', JSON.stringify(DATA)); render();
+        closeSheet(); toast(r.result || 'Saved');
+      } else toast(r.error || 'Could not save', true);
+    });
+  });
 }
 
 /* ================= FORMS ================= */
-$$('input[type=date]').forEach(i => i.value = today());
-
-function live(form, fn) { form.addEventListener('input', fn); fn(); }
-
-/* round preview */
-live($('#f-round'), () => {
-  const a = +$('#f-round').amount.value || 0;
-  $('#roundSplit').innerHTML = a
-    ? Object.entries(SHARES).map(([n, s]) => `${n} <b>${f(a * s)}</b>`).join(' &nbsp;·&nbsp; ') + `<br>Total <b>${f(a)}</b>`
-    : 'Enter an amount to see the 40 / 40 / 20 split.';
-});
-
-/* sale preview */
-const saleForm = $('#f-sale');
-const TYPE_NOTE = {
-  'Sold/Reinvested': 'Cash stays with Rafique and is spent on the pond.',
-  'Income': 'Cash is shared out 40 / 40 / 20. It does not stay in the pond.',
-  'Eaten': 'No cash. Counted as income and split 40 / 40 / 20 in kind.'
-};
-live(saleForm, () => {
-  const kg = +saleForm.kg.value || 0, rate = +saleForm.rate.value || 0, d = +saleForm.discount.value || 0;
-  const t = saleForm.type.value, net = kg * rate - d;
-  $('#saleCalc').innerHTML = kg && rate
-    ? `Total <b>${f(kg * rate)}</b> &nbsp;·&nbsp; less discount <b>${f(d)}</b> &nbsp;·&nbsp; value <b>${f(net)}</b>` +
-      (t !== 'Sold/Reinvested' ? `<br>Rafique <b>${f(net * .4)}</b> &nbsp;·&nbsp; Anwar <b>${f(net * .4)}</b> &nbsp;·&nbsp; Shahidullah <b>${f(net * .2)}</b>` : '') +
-      `<br><span class="opt">${TYPE_NOTE[t] || ''}</span>`
-    : 'Enter kg and rate to see the total.';
-});
-
-/* ---------- history ---------- */
-const HIST = {
-  expenses:    { title: 'All expenses',    sign: -1 },
-  investments: { title: 'All investments', sign: 0 },
-  payments:    { title: 'All payments',    sign: 1 },
-  sales:       { title: 'All fish out',    sign: 1 }
-};
-function openHist(kind) {
-  if (!DATA) return;
-  let rows = [], total = 0;
-  if (kind === 'expenses') {
-    rows = DATA.expenses.map(e => ({ d: e.date, t: e.purpose || e.payee || 'Expense',
-      s: e.payee + (e.remarks ? ' · ' + e.remarks : ''), a: e.amount, sub: '' }));
-    total = DATA.summary.cost;
-  } else if (kind === 'investments') {
-    rows = DATA.investments.map(e => ({ d: e.date, t: e.who, s: e.purpose, a: e.amount, sub: '' }));
-    total = DATA.summary.projected;
-  } else if (kind === 'payments') {
-    DATA.partners.forEach(p => (p.payments || []).forEach(x =>
-      rows.push({ d: x.date, t: p.name, s: x.amount < 0 ? 'Refunded to him' : 'Paid to Rafique', a: x.amount, sub: '' })));
-    total = rows.reduce((a, b) => a + b.a, 0);
-  } else {
-    rows = DATA.sales.map(x => ({ d: x.date, t: x.buyer || 'Fish out',
-      s: x.type + ' · ' + x.kg + ' kg at ' + f(x.rate) + (x.discount ? ' · discount ' + f(x.discount) : ''),
-      a: x.received, sub: '' }));
-    total = DATA.summary.revenue;
-  }
-  rows.sort((a, b) => (b.d || '').localeCompare(a.d || ''));
-  $('#histTitle').textContent = HIST[kind].title;
-  $('#histTotal').textContent = f(total);
-  let html = '', lastM = '';
-  rows.forEach(r => {
-    const mk = (r.d || '').slice(0, 7);
-    if (mk !== lastM) { lastM = mk; html += `<div class="hgroup">${monthName(mk)}</div>`; }
-    html += `<div class="hrow"><div class="l"><b>${esc(r.t)}</b><span>${esc(r.s)}</span></div>
-      <div class="r">${r.a < 0 ? '−' : ''}${f(Math.abs(r.a))}<span>${r.d || ''}</span></div></div>`;
-  });
-  $('#histBody').innerHTML = html || '<p class="cap">Nothing recorded yet.</p>';
-  $('#histView').classList.remove('hidden');
-  $('#histBody').scrollTop = 0;
+function fillPartnerSelect() {
+  const sel = $('#paySel'); if (!sel || sel.options.length) return;
+  (DATA.partnerNames || ['Anwar', 'Shahidullah']).filter(n => n !== 'Rafique')
+    .forEach(n => sel.add(new Option(n, n)));
 }
-function monthName(mk) {
-  if (!mk || mk.length < 7) return 'Undated';
-  const [y, m] = mk.split('-');
-  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m - 1] + ' ' + y;
-}
-$$('button.hist').forEach(b => b.onclick = () => openHist(b.dataset.h));
-$('#histBack').onclick = () => $('#histView').classList.add('hidden');
-
-/* payment state */
 function updatePayState() {
   const box = $('#payState'); if (!DATA) { box.textContent = ''; return; }
-  const name = $('#paySel').value;
-  const p = DATA.partners.find(x => x.name === name);
-  box.innerHTML = p ? `${p.name} should invest <b>${f(p.should)}</b>, has paid <b>${f(p.paid)}</b>, still due <b>${f(p.due)}</b>` : '';
+  const p = (DATA.partners || []).find(x => x.name === $('#paySel').value);
+  if (!p) { box.textContent = ''; return; }
+  box.innerHTML = `<div class="sp">
+    <div><b>${f(p.should)}</b><span>SHOULD INVEST</span></div>
+    <div><b>${f(p.paid)}</b><span>PAID SO FAR</span></div>
+    <div><b>${f(p.due)}</b><span>STILL DUE</span></div></div>`;
 }
 $('#paySel').addEventListener('change', updatePayState);
 
-/* submit handling */
+/* investment split preview */
+function invPreview() {
+  const total = +$('#f-invest [name=amount]').value || 0;
+  const box = $('#invSplit');
+  if (!total) { box.innerHTML = '<span class="note">Type an amount to see each partner\'s portion.</span>'; return; }
+  box.innerHTML = `<span class="big">${f(total)}</span> to raise, split by share
+    <div class="sp">${Object.entries(SHARES).map(([n, sh]) =>
+      `<div><b>${f(total * sh)}</b><span>${n.toUpperCase()} ${Math.round(sh * 100)}%</span></div>`).join('')}</div>
+    <p class="note">Three rows are written to the ledger, one per partner, exactly as Rafique does it by hand.</p>`;
+}
+$('#f-invest').addEventListener('input', invPreview);
+
+/* sale preview */
+const TYPE_NOTE = {
+  [T.sold]:   'Cash stays with Rafique and is spent on the pond.',
+  [T.income]: 'Cash is shared out 40 / 40 / 20. It does not stay in the pond.',
+  [T.eaten]:  'No cash. Counted as income and split 40 / 40 / 20 in kind.'
+};
+function salePreview() {
+  const fm = $('#f-sale');
+  const kg = +fm.kg.value || 0, rate = +fm.rate.value || 0, disc = +fm.discount.value || 0;
+  const val = Math.max(0, kg * rate - disc), type = fm.type.value;
+  const split = type === T.sold ? '' :
+    `<div class="sp">${Object.entries(SHARES).map(([n, sh]) =>
+      `<div><b>${f(val * sh)}</b><span>${n.toUpperCase()}</span></div>`).join('')}</div>`;
+  $('#saleCalc').innerHTML =
+    `<span class="big">${f(val)}</span> · ${kg || 0} kg at ${rate || 0}${disc ? ' less ' + f(disc) : ''}
+     ${split}<p class="note">${TYPE_NOTE[type] || ''}</p>`;
+}
+$('#f-sale').addEventListener('input', salePreview);
+$('#f-sale').addEventListener('change', salePreview);
+
+/* submit */
 function wire(sel, build, okMsg) {
   $(sel).addEventListener('submit', async ev => {
     ev.preventDefault();
@@ -371,94 +528,85 @@ function wire(sel, build, okMsg) {
     if (r.ok) {
       DATA = r.data; localStorage.setItem('ponddata', JSON.stringify(DATA)); render();
       ev.target.reset(); $$('input[type=date]').forEach(i => i.value = today());
-      ev.target.dispatchEvent(new Event('input'));
+      invPreview(); salePreview();
       toast(r.result || okMsg); show('dash');
-      setTimeout(() => load(true), 1200);   // confirm against the sheet itself
     } else {
       toast(r.error || 'Could not save', true);
-      if (/passcode/i.test(r.error || '')) { PIN = ''; MODE = 'view'; localStorage.removeItem('pondpin'); localStorage.setItem('pondmode','view'); applyMode(); openGate(true); }
+      if (/passcode/i.test(r.error || '')) {
+        PIN = ''; MODE = 'view';
+        localStorage.removeItem('pondpin'); localStorage.setItem('pondmode', 'view');
+        applyMode(); openGate(true);
+      }
     }
   });
 }
-wire('#f-round', fm => ({ action: 'round', date: fm.date.value, purpose: fm.purpose.value, amount: +fm.amount.value }), 'Round announced');
-wire('#f-expense', fm => ({ action: 'expense', date: fm.date.value, payee: fm.payee.value, purpose: fm.purpose.value, amount: +fm.amount.value, remarks: fm.remarks.value }), 'Expense saved');
-wire('#f-sale', fm => ({ action: 'sale', date: fm.date.value, buyer: fm.buyer.value, kg: +fm.kg.value, rate: +fm.rate.value, discount: +fm.discount.value || 0, type: fm.type.value, remarks: fm.remarks.value }), 'Sale saved');
-wire('#f-pay', fm => ({ action: 'payment', partner: fm.partner.value, date: fm.date.value, amount: +fm.amount.value, refund: fm.refund.checked }), 'Payment saved');
+wire('#f-invest',  fm => ({ action: 'investment', date: fm.date.value, purpose: fm.purpose.value, amount: +fm.amount.value }), 'Investment announced');
+wire('#f-expense', fm => ({ action: 'expense', date: fm.date.value, payee: fm.payee.value, purpose: fm.purpose.value, amount: +fm.amount.value, comment: fm.comment.value }), 'Expense saved');
+wire('#f-sale',    fm => ({ action: 'sale', date: fm.date.value, description: fm.description.value, kg: +fm.kg.value, rate: +fm.rate.value, discount: +fm.discount.value || 0, type: fm.type.value, comment: fm.comment.value }), 'Saved');
+wire('#f-pay',     fm => ({ action: 'payment', partner: fm.partner.value, date: fm.date.value, amount: +fm.amount.value }), 'Payment saved');
 
-/* ---------- splash ---------- */
-setTimeout(() => { const s = $('#splash'); if (s) s.classList.add('gone'); }, 2200);
-
-/* ---------- live updates ----------
-   Anything Rafique saves must reach every other phone without anyone tapping refresh.
-   Three triggers: a 20 second poll while the app is on screen, the moment the app is
-   brought back to the foreground, and the moment the phone regains a connection. */
+/* ================= LIVE UPDATES ================= */
 const POLL_MS = 20000;
 let pollTimer = null;
+const stopPolling = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
 function startPolling() {
   stopPolling();
   pollTimer = setInterval(() => { if (!document.hidden) { load(true); checkBuild(); } }, POLL_MS);
 }
-function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { stopPolling(); }
-  else { load(true); startPolling(); }
+  if (document.hidden) stopPolling(); else { load(true); startPolling(); }
 });
-window.addEventListener('focus',  () => load(true));
-window.addEventListener('online', () => { $('#stamp').textContent = 'back online, refreshing…'; load(true); });
-window.addEventListener('offline', () => { $('#stamp').textContent = 'offline · showing last saved copy'; });
+addEventListener('focus',  () => load(true));
+addEventListener('online', () => { $('#stamp').textContent = 'back online, refreshing…'; load(true); });
+addEventListener('offline', () => { $('#stamp').textContent = 'offline · last saved copy'; });
 
-/* Pull down at the top of the dashboard to force a refresh. */
 let pullY = 0;
 addEventListener('touchstart', e => { pullY = scrollY === 0 ? e.touches[0].clientY : 0; }, { passive: true });
 addEventListener('touchend', e => {
-  if (pullY && e.changedTouches[0].clientY - pullY > 90) { toast('Refreshing…'); load(true); }
+  if (pullY && e.changedTouches[0].clientY - pullY > 90) load(true);
   pullY = 0;
 }, { passive: true });
 
-/* ---------- new app version ----------
-   version.json carries a build stamp. Bump it on every publish and every open app
-   picks the new code up within 20 seconds, without anyone reinstalling anything. */
-let BUILD = null;
+/* ---- new app version ----
+   Bump version.json on every publish. Open apps pick it up within 20 seconds. */
+let reloading = false, BUILD = null;
 async function checkBuild() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
     const v = (await r.json()).build;
     if (!BUILD) { BUILD = v; return; }
     if (v !== BUILD && !reloading) {
-      reloading = true;
-      toast('New version, updating…');
+      reloading = true; toast('New version, updating…');
       if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
       setTimeout(() => location.reload(), 800);
     }
   } catch (e) { /* offline, try again next poll */ }
 }
-
-/* The service worker is a second safety net for the same job. */
-function watchForUpdate(reg) {
-  if (!reg) return;
-  setInterval(() => reg.update().catch(() => {}), 60000);
-  reg.addEventListener('updatefound', () => {
-    const sw = reg.installing;
-    if (!sw) return;
-    sw.addEventListener('statechange', () => {
-      if (sw.state === 'installed' && navigator.serviceWorker.controller) toast('Updating the app…');
-    });
-  });
-}
-let reloading = false;
 const hadController = 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading) return;   // first install claims the page, that is not an update
+    if (!hadController || reloading) return;
     reloading = true; location.reload();
   });
-  navigator.serviceWorker.register('sw.js').then(watchForUpdate).catch(() => {});
+  navigator.serviceWorker.register('sw.js')
+    .then(reg => { if (reg) setInterval(() => reg.update().catch(() => {}), 60000); })
+    .catch(() => {});
 }
 
-/* ---------- boot ---------- */
+/* ================= SPLASH =================
+   Full blue screen only when the app is genuinely opened.
+   On a refresh, just the little fish in the corner. */
+const FIRST_OPEN = !sessionStorage.getItem('pondopened');
+sessionStorage.setItem('pondopened', '1');
+if (FIRST_OPEN) setTimeout(() => $('#splash').classList.add('gone'), 2000);
+else { const sp = $('#splash'); if (sp) sp.remove(); }
+
+/* ================= BOOT ================= */
+$$('input[type=date]').forEach(i => { if (!i.value) i.value = today(); });
+history.replaceState({ v: 'dash' }, '', '#dash');
 applyMode();
 if (!MODE) openGate(false); else closeGate();
+invPreview(); salePreview();
 load();
 checkBuild();
 startPolling();

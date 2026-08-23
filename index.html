@@ -15,6 +15,17 @@
 </head>
 <body>
 
+<div class="splash" id="splash">
+  <svg viewBox="0 0 200 120" aria-hidden="true">
+    <g class="f f1"><path d="M0 0c-18 0-30 8-34 14 4 6 16 14 34 14 10 0 18-3 23-7l14 9V-2l-14 9c-5-4-13-7-23-7Z"/><circle cx="-22" cy="11" r="2.4"/></g>
+    <g class="f f2"><path d="M0 0c-13 0-22 6-25 10 3 4 12 10 25 10 7 0 13-2 17-5l10 6V-1l-10 6c-4-3-10-5-17-5Z"/><circle cx="-16" cy="8" r="1.8"/></g>
+    <g class="f f3"><path d="M0 0c-10 0-17 5-19 8 2 3 9 8 19 8 5 0 10-2 13-4l8 5V-1l-8 5c-3-2-8-4-13-4Z"/><circle cx="-12" cy="6" r="1.4"/></g>
+  </svg>
+  <div class="sp-name">Natun Bari Pond</div>
+  <div class="sp-wave"><i></i><i></i><i></i></div>
+</div>
+
+
 <header class="top">
   <div class="brand">
     <img src="icons/icon-192.png" alt="" width="28" height="28">
@@ -23,7 +34,6 @@
   <div class="topbtns">
     <button id="installBtn" class="ghost hidden" title="Install app">Install</button>
     <button id="themeBtn" class="ghost" title="Theme">◐</button>
-    <button id="authBtn" class="ghost" title="Access">🔑</button>
   </div>
 </header>
 
@@ -32,6 +42,12 @@
 <!-- ============ DASHBOARD ============ -->
 <section class="view" id="v-dash">
   <div id="tiles" class="tiles"></div>
+
+  <div class="card">
+    <h2>Where the fish money went</h2>
+    <p class="cap" id="fishCap"></p>
+    <div id="fishSplit" class="fsplit"></div>
+  </div>
 
   <div class="card">
     <h2>Where the money went</h2>
@@ -58,8 +74,14 @@
   </div>
 
   <div class="card">
-    <h2>Latest entries</h2>
-    <div id="recent"></div>
+    <h2>Full history</h2>
+    <p class="cap">Every entry ever made, newest first.</p>
+    <div class="histbtns">
+      <button class="hist" data-h="expenses"><span>All expenses</span><b id="hcExp">–</b></button>
+      <button class="hist" data-h="investments"><span>All investments</span><b id="hcInv">–</b></button>
+      <button class="hist" data-h="payments"><span>All payments</span><b id="hcPay">–</b></button>
+      <button class="hist" data-h="sales"><span>All fish out</span><b id="hcSale">–</b></button>
+    </div>
   </div>
 </section>
 
@@ -106,12 +128,12 @@
     <p class="cap">Sold to a buyer, or eaten by the partners. Eaten fish counts as income but never as cash.</p>
     <form id="f-sale" class="form">
       <label>Date<input type="date" name="date" required></label>
-      <div class="row">
-        <label>Type
-          <select name="type"><option>Sold</option><option>Eaten</option></select></label>
-        <label id="takenWrap" class="hidden">Taken by
-          <select name="takenBy"><option>Rafique</option><option>Anwar</option><option>Shahidullah</option></select></label>
-      </div>
+      <label>What happened to the money
+        <select name="type">
+          <option value="Sold/Reinvested">Sold, money stays in the pond</option>
+          <option value="Income">Sold, cash shared out to the partners</option>
+          <option value="Eaten">Eaten by the partners</option>
+        </select></label>
       <label>Buyer and fish species<input name="buyer" placeholder="Badsa - Gras, Rou, Mrig" required></label>
       <div class="row">
         <label>Weight in kg<input type="number" name="kg" min="0.1" step="0.1" inputmode="decimal" required></label>
@@ -119,6 +141,7 @@
       </div>
       <label>Discount <span class="opt">if the buyer paid less</span>
         <input type="number" name="discount" min="0" step="1" inputmode="numeric" value="0"></label>
+      <label>Remarks <span class="opt">optional</span><input name="remarks"></label>
       <div class="split" id="saleCalc"></div>
       <button class="primary" type="submit">Save sale</button>
     </form>
@@ -151,6 +174,15 @@
   <button data-v="pay" class="lockable"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-8 1.7-8 4v2h16v-2c0-2.3-4.7-4-8-4Z"/></svg><span>Payments</span></button>
 </nav>
 
+
+<div class="histview hidden" id="histView">
+  <div class="histTop">
+    <button id="histBack" class="ghost">‹ Back</button>
+    <strong id="histTitle">History</strong>
+    <span id="histTotal"></span>
+  </div>
+  <div class="histBody" id="histBody"></div>
+</div>
 
 <div class="gate" id="gate">
   <div class="gateBox">

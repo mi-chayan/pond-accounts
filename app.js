@@ -36,10 +36,16 @@ function signedIn() { return MODE === 'admin' && !!PIN; }
 function applyMode() {
   const admin = signedIn();
   document.body.classList.toggle('viewonly', !admin);
-  $('#authBtn').textContent = admin ? '🔓' : '🔑';
-  $('#authBtn').title = admin ? 'Full access. Tap to lock.' : 'Viewer. Tap to unlock.';
   if (!admin) show('dash');
 }
+
+/* Hidden way back to the passcode screen: tap the app name three times.
+   There is no visible key, as asked. Without this a viewer could never unlock. */
+let taps = 0, tapT = null;
+document.querySelector('.brand').addEventListener('click', () => {
+  taps++; clearTimeout(tapT); tapT = setTimeout(() => taps = 0, 900);
+  if (taps >= 3) { taps = 0; openGate(true); }
+});
 
 function openGate(force) {
   $('#gateErr').classList.add('hidden');
@@ -74,14 +80,6 @@ $('#gateGo').onclick = async () => {
   }
 };
 
-$('#authBtn').onclick = () => {
-  if (signedIn()) {
-    MODE = 'view'; PIN = '';
-    localStorage.setItem('pondmode', 'view'); localStorage.removeItem('pondpin');
-    applyMode(); toast('Locked. Dashboard only.');
-  } else openGate(true);
-};
-
 /* ---------- install to home screen ---------- */
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {
@@ -103,7 +101,14 @@ async function post(body) {
     return await res.json();
   } catch (e) { return { ok: false, error: 'Could not reach the sheet. Check your connection.' }; }
 }
+let loading = false, lastLoad = 0;
 async function load(silent) {
+  const now = Date.now();
+  if (loading || (silent && now - lastLoad < 3000)) return;   // no duplicate calls
+  loading = true; lastLoad = now;
+  try { await doLoad(silent); } finally { loading = false; }
+}
+async function doLoad(silent) {
   if (API.includes('PASTE_YOUR')) {
     const c = localStorage.getItem('ponddata');
     if (c) { DATA = JSON.parse(c); render(); }
@@ -146,11 +151,19 @@ function render() {
   $('#tiles').innerHTML = [
     ['Cash in hand', f(s.cash), 'with Rafique right now', ''],
     ['Total invested', f(s.projected), 'by all partners', ''],
-    ['Fish revenue', f(s.revenue), (s.kgSold + s.kgEaten).toFixed(1) + ' kg out of the pond', ''],
+    ['Fish revenue', f(s.revenue), s.kgTotal.toFixed(1) + ' kg out of the pond', ''],
     ['Total cost', f(s.cost), 'since the pond started', ''],
     ['Profit / Loss', f(s.profit), 'lease charged in full to year one', s.profit < 0 ? 'neg' : 'pos'],
     ['Fish in pond', f(s.stock), 'estimate, not in the profit line', '']
   ].map(([k, v, n, c]) => `<div class="tile"><div class="k">${k}</div><div class="v ${c}">${v}</div><div class="n">${n}</div></div>`).join('');
+
+  /* fish money three ways */
+  $('#fishCap').textContent = `Fish revenue ${f(s.revenue)} from ${s.kgTotal.toFixed(1)} kg. Only the first line is still pond cash.`;
+  $('#fishSplit').innerHTML = [
+    ['Stayed in the pond', s.reinvested, s.kgSold, 'Sold and spent back on feed, medicine and labour.'],
+    ['Shared out as cash', s.income, s.kgIncome, 'Sold and handed to the partners 40 / 40 / 20.'],
+    ['Taken as fish', s.eaten, s.kgEaten, 'Eaten by the partners. Counted as income, never as cash.']
+  ].map(([k, v, kg, n]) => `<div class="frow"><div class="fk">${k}</div><div class="fv">${f(v)}</div><div class="fkg">${kg.toFixed(1)} kg</div><div class="fn">${n}</div></div>`).join('');
 
   /* donut */
   $('#costCap').textContent = `Total cost ${f(s.cost)}. Biggest single item: ${DATA.categories[0] ? DATA.categories[0].label.toLowerCase() : '—'}.`;
@@ -160,12 +173,14 @@ function render() {
   drawBars(DATA.byMonth.map(m => ({ m: m.m, v: m.cost })), s.runPerMonth, s.lease);
 
   /* partners */
-  $('#partners').innerHTML = '<table><tr><th>Partner</th><th>Share</th><th>Should</th><th>Paid</th><th>Due</th></tr>' +
+  $('#partners').innerHTML = '<table><tr><th>Partner</th><th>Should</th><th>Paid</th><th>Due</th><th>Got fish</th><th>Got cash</th></tr>' +
     DATA.partners.map((p, i) => `<tr><td><span class="dot" style="background:var(--s${i + 1})"></span>${p.name}</td>
-      <td>${Math.round(p.share * 100)}%</td><td>${f(p.should)}</td><td>${f(p.paid)}</td>
-      <td class="${p.due > 0 ? 'neg' : p.due < 0 ? 'pos' : ''}">${f(p.due)}</td></tr>`).join('') +
-    `<tr><td><b>Total</b></td><td></td><td><b>${f(sum(DATA.partners, 'should'))}</b></td>
-      <td><b>${f(sum(DATA.partners, 'paid'))}</b></td><td><b>${f(sum(DATA.partners, 'due'))}</b></td></tr></table>`;
+      <td>${f(p.should)}</td><td>${f(p.paid)}</td>
+      <td class="${p.due > 0 ? 'neg' : p.due < 0 ? 'pos' : ''}">${f(p.due)}</td>
+      <td>${f(p.fish)}</td><td>${f(p.money || 0)}</td></tr>`).join('') +
+    `<tr><td><b>Total</b></td><td><b>${f(sum(DATA.partners, 'should'))}</b></td>
+      <td><b>${f(sum(DATA.partners, 'paid'))}</b></td><td><b>${f(sum(DATA.partners, 'due'))}</b></td>
+      <td><b>${f(sum(DATA.partners, 'fish'))}</b></td><td><b>${f(DATA.partners.reduce((a,x)=>a+(x.money||0),0))}</b></td></tr></table>`;
 
   /* monthly plan */
   $('#planCap').textContent = `Running ${f(s.runPerMonth)} plus the lease share ${f(s.leasePerMonth)}. To break even the pond must produce about ${s.breakEvenKg} kg a month at ${s.rate} taka.`;
@@ -174,15 +189,12 @@ function render() {
       <td>${Math.round(p.share * 100)}%</td><td>${f(s.trueMonth * p.share)}</td><td>${f(s.trueMonth * 12 * p.share)}</td></tr>`).join('') +
     `<tr><td><b>Pond total</b></td><td></td><td><b>${f(s.trueMonth)}</b></td><td><b>${f(s.trueMonth * 12)}</b></td></tr></table>`;
 
-  /* recent */
-  const rec = [];
-  DATA.expenses.slice(-6).forEach(e => rec.push({ d: e.date, t: e.purpose || e.payee, s: 'Expense · ' + e.payee, a: -e.amount }));
-  DATA.sales.slice(-4).forEach(x => rec.push({ d: x.date, t: x.buyer, s: x.type + ' · ' + x.kg + ' kg', a: x.type === 'Eaten' ? 0 : x.received }));
-  DATA.investments.slice(-3).forEach(x => rec.push({ d: x.date, t: x.purpose, s: 'Round · ' + x.who, a: 0 }));
-  rec.sort((a, b) => (b.d || '').localeCompare(a.d || '')).splice(10);
-  $('#recent').innerHTML = rec.map(r => `<div class="rec"><div class="l"><b>${esc(r.t)}</b><span>${esc(r.s)}</span></div>
-    <div class="r">${r.a ? (r.a < 0 ? '−' : '+') + f(Math.abs(r.a)) : '—'}<br><span class="opt">${r.d || ''}</span></div></div>`).join('')
-    || '<p class="cap">Nothing yet.</p>';
+  /* history counts */
+  const pays = DATA.partners.reduce((a, p) => a + (p.payments ? p.payments.length : 0), 0);
+  $('#hcExp').textContent  = DATA.expenses.length + ' entries';
+  $('#hcInv').textContent  = DATA.investments.length + ' entries';
+  $('#hcPay').textContent  = pays + ' entries';
+  $('#hcSale').textContent = DATA.sales.length + ' entries';
 
   /* payee suggestions + partner select */
   const payees = [...new Set(DATA.expenses.map(e => e.payee).filter(Boolean))].sort();
@@ -274,14 +286,69 @@ live($('#f-round'), () => {
 
 /* sale preview */
 const saleForm = $('#f-sale');
+const TYPE_NOTE = {
+  'Sold/Reinvested': 'Cash stays with Rafique and is spent on the pond.',
+  'Income': 'Cash is shared out 40 / 40 / 20. It does not stay in the pond.',
+  'Eaten': 'No cash. Counted as income and split 40 / 40 / 20 in kind.'
+};
 live(saleForm, () => {
   const kg = +saleForm.kg.value || 0, rate = +saleForm.rate.value || 0, d = +saleForm.discount.value || 0;
-  $('#takenWrap').classList.toggle('hidden', saleForm.type.value !== 'Eaten');
+  const t = saleForm.type.value, net = kg * rate - d;
   $('#saleCalc').innerHTML = kg && rate
-    ? `Total <b>${f(kg * rate)}</b> &nbsp;·&nbsp; less discount <b>${f(d)}</b> &nbsp;·&nbsp; received <b>${f(kg * rate - d)}</b>` +
-      (saleForm.type.value === 'Eaten' ? '<br><span class="opt">Eaten fish counts as income but never as cash.</span>' : '')
+    ? `Total <b>${f(kg * rate)}</b> &nbsp;·&nbsp; less discount <b>${f(d)}</b> &nbsp;·&nbsp; value <b>${f(net)}</b>` +
+      (t !== 'Sold/Reinvested' ? `<br>Rafique <b>${f(net * .4)}</b> &nbsp;·&nbsp; Anwar <b>${f(net * .4)}</b> &nbsp;·&nbsp; Shahidullah <b>${f(net * .2)}</b>` : '') +
+      `<br><span class="opt">${TYPE_NOTE[t] || ''}</span>`
     : 'Enter kg and rate to see the total.';
 });
+
+/* ---------- history ---------- */
+const HIST = {
+  expenses:    { title: 'All expenses',    sign: -1 },
+  investments: { title: 'All investments', sign: 0 },
+  payments:    { title: 'All payments',    sign: 1 },
+  sales:       { title: 'All fish out',    sign: 1 }
+};
+function openHist(kind) {
+  if (!DATA) return;
+  let rows = [], total = 0;
+  if (kind === 'expenses') {
+    rows = DATA.expenses.map(e => ({ d: e.date, t: e.purpose || e.payee || 'Expense',
+      s: e.payee + (e.remarks ? ' · ' + e.remarks : ''), a: e.amount, sub: '' }));
+    total = DATA.summary.cost;
+  } else if (kind === 'investments') {
+    rows = DATA.investments.map(e => ({ d: e.date, t: e.who, s: e.purpose, a: e.amount, sub: '' }));
+    total = DATA.summary.projected;
+  } else if (kind === 'payments') {
+    DATA.partners.forEach(p => (p.payments || []).forEach(x =>
+      rows.push({ d: x.date, t: p.name, s: x.amount < 0 ? 'Refunded to him' : 'Paid to Rafique', a: x.amount, sub: '' })));
+    total = rows.reduce((a, b) => a + b.a, 0);
+  } else {
+    rows = DATA.sales.map(x => ({ d: x.date, t: x.buyer || 'Fish out',
+      s: x.type + ' · ' + x.kg + ' kg at ' + f(x.rate) + (x.discount ? ' · discount ' + f(x.discount) : ''),
+      a: x.received, sub: '' }));
+    total = DATA.summary.revenue;
+  }
+  rows.sort((a, b) => (b.d || '').localeCompare(a.d || ''));
+  $('#histTitle').textContent = HIST[kind].title;
+  $('#histTotal').textContent = f(total);
+  let html = '', lastM = '';
+  rows.forEach(r => {
+    const mk = (r.d || '').slice(0, 7);
+    if (mk !== lastM) { lastM = mk; html += `<div class="hgroup">${monthName(mk)}</div>`; }
+    html += `<div class="hrow"><div class="l"><b>${esc(r.t)}</b><span>${esc(r.s)}</span></div>
+      <div class="r">${r.a < 0 ? '−' : ''}${f(Math.abs(r.a))}<span>${r.d || ''}</span></div></div>`;
+  });
+  $('#histBody').innerHTML = html || '<p class="cap">Nothing recorded yet.</p>';
+  $('#histView').classList.remove('hidden');
+  $('#histBody').scrollTop = 0;
+}
+function monthName(mk) {
+  if (!mk || mk.length < 7) return 'Undated';
+  const [y, m] = mk.split('-');
+  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m - 1] + ' ' + y;
+}
+$$('button.hist').forEach(b => b.onclick = () => openHist(b.dataset.h));
+$('#histBack').onclick = () => $('#histView').classList.add('hidden');
 
 /* payment state */
 function updatePayState() {
@@ -306,6 +373,7 @@ function wire(sel, build, okMsg) {
       ev.target.reset(); $$('input[type=date]').forEach(i => i.value = today());
       ev.target.dispatchEvent(new Event('input'));
       toast(r.result || okMsg); show('dash');
+      setTimeout(() => load(true), 1200);   // confirm against the sheet itself
     } else {
       toast(r.error || 'Could not save', true);
       if (/passcode/i.test(r.error || '')) { PIN = ''; MODE = 'view'; localStorage.removeItem('pondpin'); localStorage.setItem('pondmode','view'); applyMode(); openGate(true); }
@@ -314,13 +382,83 @@ function wire(sel, build, okMsg) {
 }
 wire('#f-round', fm => ({ action: 'round', date: fm.date.value, purpose: fm.purpose.value, amount: +fm.amount.value }), 'Round announced');
 wire('#f-expense', fm => ({ action: 'expense', date: fm.date.value, payee: fm.payee.value, purpose: fm.purpose.value, amount: +fm.amount.value, remarks: fm.remarks.value }), 'Expense saved');
-wire('#f-sale', fm => ({ action: 'sale', date: fm.date.value, buyer: fm.buyer.value, kg: +fm.kg.value, rate: +fm.rate.value, discount: +fm.discount.value || 0, type: fm.type.value, takenBy: fm.takenBy.value }), 'Sale saved');
+wire('#f-sale', fm => ({ action: 'sale', date: fm.date.value, buyer: fm.buyer.value, kg: +fm.kg.value, rate: +fm.rate.value, discount: +fm.discount.value || 0, type: fm.type.value, remarks: fm.remarks.value }), 'Sale saved');
 wire('#f-pay', fm => ({ action: 'payment', partner: fm.partner.value, date: fm.date.value, amount: +fm.amount.value, refund: fm.refund.checked }), 'Payment saved');
+
+/* ---------- splash ---------- */
+setTimeout(() => { const s = $('#splash'); if (s) s.classList.add('gone'); }, 2200);
+
+/* ---------- live updates ----------
+   Anything Rafique saves must reach every other phone without anyone tapping refresh.
+   Three triggers: a 20 second poll while the app is on screen, the moment the app is
+   brought back to the foreground, and the moment the phone regains a connection. */
+const POLL_MS = 20000;
+let pollTimer = null;
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(() => { if (!document.hidden) { load(true); checkBuild(); } }, POLL_MS);
+}
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { stopPolling(); }
+  else { load(true); startPolling(); }
+});
+window.addEventListener('focus',  () => load(true));
+window.addEventListener('online', () => { $('#stamp').textContent = 'back online, refreshing…'; load(true); });
+window.addEventListener('offline', () => { $('#stamp').textContent = 'offline · showing last saved copy'; });
+
+/* Pull down at the top of the dashboard to force a refresh. */
+let pullY = 0;
+addEventListener('touchstart', e => { pullY = scrollY === 0 ? e.touches[0].clientY : 0; }, { passive: true });
+addEventListener('touchend', e => {
+  if (pullY && e.changedTouches[0].clientY - pullY > 90) { toast('Refreshing…'); load(true); }
+  pullY = 0;
+}, { passive: true });
+
+/* ---------- new app version ----------
+   version.json carries a build stamp. Bump it on every publish and every open app
+   picks the new code up within 20 seconds, without anyone reinstalling anything. */
+let BUILD = null;
+async function checkBuild() {
+  try {
+    const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    const v = (await r.json()).build;
+    if (!BUILD) { BUILD = v; return; }
+    if (v !== BUILD && !reloading) {
+      reloading = true;
+      toast('New version, updating…');
+      if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+      setTimeout(() => location.reload(), 800);
+    }
+  } catch (e) { /* offline, try again next poll */ }
+}
+
+/* The service worker is a second safety net for the same job. */
+function watchForUpdate(reg) {
+  if (!reg) return;
+  setInterval(() => reg.update().catch(() => {}), 60000);
+  reg.addEventListener('updatefound', () => {
+    const sw = reg.installing;
+    if (!sw) return;
+    sw.addEventListener('statechange', () => {
+      if (sw.state === 'installed' && navigator.serviceWorker.controller) toast('Updating the app…');
+    });
+  });
+}
+let reloading = false;
+const hadController = 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;   // first install claims the page, that is not an update
+    reloading = true; location.reload();
+  });
+  navigator.serviceWorker.register('sw.js').then(watchForUpdate).catch(() => {});
+}
 
 /* ---------- boot ---------- */
 applyMode();
 if (!MODE) openGate(false); else closeGate();
 load();
-setInterval(() => load(true), 120000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) load(true); });
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+checkBuild();
+startPolling();

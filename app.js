@@ -648,7 +648,11 @@ if ('serviceWorker' in navigator) {
    On a refresh, just the little fish in the corner. */
 const FIRST_OPEN = !sessionStorage.getItem('pondopened');
 sessionStorage.setItem('pondopened', '1');
-if (FIRST_OPEN) setTimeout(() => $('#splash').classList.add('gone'), 2000);
+if (FIRST_OPEN) setTimeout(() => {
+  const sp = $('#splash'); if (!sp) return;
+  sp.classList.add('gone');
+  setTimeout(() => sp.remove(), 600);   // never leave a full-screen layer over the page
+}, 2000);
 else { const sp = $('#splash'); if (sp) sp.remove(); }
 
 /* ================= BOOT ================= */

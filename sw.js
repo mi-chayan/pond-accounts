@@ -2,7 +2,7 @@
    Rule: the network is always the truth. The cache exists only so the app still
    opens when the phone has no signal. That way any change published to the site
    reaches every installed app on the very next open, with no reinstall. */
-const CACHE = 'pond-v9';
+const CACHE = 'pond-v10';
 const SHELL = ['/', '/index.html', '/app.js', '/styles.css', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 
